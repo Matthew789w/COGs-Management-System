@@ -49,8 +49,7 @@ class UnitOfMeasurementController extends ApiController
             $unit->materials()->exists() ||
             $unit->utilities()->exists() ||
             $unit->products()->exists() ||
-            $unit->productMaterials()->exists() ||
-            $unit->productUtilities()->exists()
+            $unit->productMaterials()->exists()
         ) {
             return $this->respondWithError(
                 'Unit cannot be deleted while it is referenced by other records.',

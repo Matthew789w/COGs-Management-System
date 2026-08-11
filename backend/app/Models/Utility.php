@@ -38,7 +38,7 @@ class Utility extends Model
     public function products(): BelongsToMany
     {
         return $this->belongsToMany(Product::class, 'product_utilities')
-            ->withPivot('unit_id', 'quantity')
+            ->withPivot('quantity')
             ->withTimestamps();
     }
 }

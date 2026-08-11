@@ -15,6 +15,7 @@ class ProductResource extends JsonResource
             'description' => $this->description,
             'default_unit' => new UnitOfMeasurementResource($this->whenLoaded('defaultUnit')),
             'list_price' => $this->list_price,
+            'production_quantity' => $this->production_quantity,
             'is_active' => $this->is_active,
             'created_at' => optional($this->created_at)->toDatetimeString(),
             'updated_at' => optional($this->updated_at)->toDatetimeString(),

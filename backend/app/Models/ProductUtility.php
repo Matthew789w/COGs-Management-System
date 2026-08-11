@@ -13,7 +13,6 @@ class ProductUtility extends Model
     protected $fillable = [
         'product_id',
         'utility_id',
-        'unit_id',
         'quantity',
     ];
 
@@ -29,10 +28,5 @@ class ProductUtility extends Model
     public function utility(): BelongsTo
     {
         return $this->belongsTo(Utility::class);
-    }
-
-    public function unit(): BelongsTo
-    {
-        return $this->belongsTo(UnitOfMeasurement::class, 'unit_id');
     }
 }

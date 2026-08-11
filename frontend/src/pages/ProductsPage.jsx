@@ -9,6 +9,7 @@ import EmptyState from '../components/ui/EmptyState'
 import PageHeader from '../components/ui/PageHeader'
 import PanelHeader from '../components/ui/PanelHeader'
 import TablePagination from '../components/ui/TablePagination'
+import { formatPeso } from '../utils/currency'
 
 const PAGE_SIZE = 10
 
@@ -48,11 +49,6 @@ function ProductsPage() {
   useEffect(() => {
     setPage(1)
   }, [search])
-
-  const formatCurrency = (value) => {
-    if (value === null || value === undefined) return '—'
-    return `$${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-  }
 
   return (
     <div>
@@ -116,7 +112,7 @@ function ProductsPage() {
                   <tr key={product.id} className="table__row">
                     <td>{product.name}</td>
                     <td className="table__cell-muted">{product.sku}</td>
-                    <td className="table__cell-mono">{formatCurrency(product.list_price)}</td>
+                    <td className="table__cell-mono">{formatPeso(product.list_price)}</td>
                     <td className="table__cell-muted">
                       {product.default_unit?.symbol || '—'}
                     </td>
@@ -129,15 +125,30 @@ function ProductsPage() {
                     </td>
                     <td>
                       <div className="table__actions">
-                        <button type="button" className="button button--ghost button--icon" aria-label="View">
-                          <Eye size={16} />
-                        </button>
-                        <button type="button" className="button button--ghost button--icon" aria-label="Edit">
-                          <Pencil size={16} />
-                        </button>
-                        <button type="button" className="button button--ghost button--icon" aria-label="Delete">
-                          <Trash2 size={16} />
-                        </button>
+                        <Link
+                          to={`/products/${product.id}`}
+                          className="table-action table-action--view"
+                          aria-label={`View ${product.name}`}
+                          title="View"
+                        >
+                          <Eye size={16} strokeWidth={2.25} />
+                        </Link>
+                        <Link
+                          to={`/products/${product.id}/edit`}
+                          className="table-action table-action--edit"
+                          aria-label={`Edit ${product.name}`}
+                          title="Edit"
+                        >
+                          <Pencil size={16} strokeWidth={2.25} />
+                        </Link>
+                        <Link
+                          to={`/products/${product.id}/delete`}
+                          className="table-action table-action--delete"
+                          aria-label={`Delete ${product.name}`}
+                          title="Delete"
+                        >
+                          <Trash2 size={16} strokeWidth={2.25} />
+                        </Link>
                       </div>
                     </td>
                   </tr>

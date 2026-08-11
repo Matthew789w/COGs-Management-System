@@ -2,10 +2,9 @@
 
 namespace Database\Factories;
 
-use App\Models\ProductUtility;
 use App\Models\Product;
+use App\Models\ProductUtility;
 use App\Models\Utility;
-use App\Models\UnitOfMeasurement;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 class ProductUtilityFactory extends Factory
@@ -17,7 +16,6 @@ class ProductUtilityFactory extends Factory
         return [
             'product_id' => Product::factory(),
             'utility_id' => Utility::factory(),
-            'unit_id' => UnitOfMeasurement::factory(),
             'quantity' => $this->faker->randomFloat(4, 0.01, 5),
         ];
     }

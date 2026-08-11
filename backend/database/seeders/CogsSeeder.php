@@ -4,10 +4,13 @@ namespace Database\Seeders;
 
 use App\Models\Material;
 use App\Models\Product;
+use App\Models\ProductLabor;
 use App\Models\ProductMaterial;
+use App\Models\ProductOverhead;
 use App\Models\ProductUtility;
 use App\Models\UnitOfMeasurement;
 use App\Models\Utility;
+use App\Services\Inventory\InventoryService;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -160,15 +163,52 @@ class CogsSeeder extends Seeder
         ProductUtility::create([
             'product_id' => $chocolateCake->id,
             'utility_id' => $electricity->id,
-            'unit_id' => $kwh->id,
             'quantity' => 0.50,
         ]);
 
         ProductUtility::create([
             'product_id' => $chocolateCake->id,
             'utility_id' => $water->id,
-            'unit_id' => $l->id,
             'quantity' => 0.20,
         ]);
+
+        ProductLabor::create([
+            'product_id' => $chocolateCake->id,
+            'role' => 'Baker',
+            'workers' => 1,
+            'hours' => 2.0000,
+            'hourly_rate' => 75.0000,
+        ]);
+
+        ProductLabor::create([
+            'product_id' => $chocolateCake->id,
+            'role' => 'Assistant',
+            'workers' => 1,
+            'hours' => 1.5000,
+            'hourly_rate' => 60.0000,
+        ]);
+
+        ProductOverhead::create([
+            'product_id' => $chocolateCake->id,
+            'name' => 'Oven Depreciation',
+            'category' => ProductOverhead::CATEGORY_DEPRECIATION,
+            'allocation_method' => ProductOverhead::ALLOCATION_FIXED_BATCH,
+            'amount' => 45.0000,
+        ]);
+
+        ProductOverhead::create([
+            'product_id' => $chocolateCake->id,
+            'name' => 'Factory Rent Allocation',
+            'category' => ProductOverhead::CATEGORY_RENT,
+            'allocation_method' => ProductOverhead::ALLOCATION_FIXED_BATCH,
+            'amount' => 30.0000,
+        ]);
+
+        $inventoryService = app(InventoryService::class);
+        $inventoryService->receiveMaterial($flour, 500.0000, 50.0000, 'Initial stock seed');
+        $inventoryService->receiveMaterial($sugar, 300.0000, 60.0000, 'Initial stock seed');
+        $inventoryService->receiveMaterial($eggs, 1000.0000, 8.0000, 'Initial stock seed');
+        $inventoryService->receiveMaterial($cocoa, 100.0000, 450.0000, 'Initial stock seed');
+        $inventoryService->receiveMaterial($cakeBox, 500.0000, 20.0000, 'Initial stock seed');
     }
 }

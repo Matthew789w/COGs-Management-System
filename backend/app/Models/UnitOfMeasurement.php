@@ -44,9 +44,4 @@ class UnitOfMeasurement extends Model
     {
         return $this->hasMany(ProductMaterial::class);
     }
-
-    public function productUtilities(): HasMany
-    {
-        return $this->hasMany(ProductUtility::class);
-    }
 }

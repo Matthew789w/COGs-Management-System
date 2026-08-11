@@ -18,6 +18,7 @@ class ProductFactory extends Factory
             'description' => $this->faker->sentence(),
             'default_unit_id' => UnitOfMeasurement::factory(),
             'list_price' => $this->faker->randomFloat(4, 10, 500),
+            'production_quantity' => 1.0000,
             'is_active' => true,
         ];
     }

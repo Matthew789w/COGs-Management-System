@@ -19,6 +19,7 @@ class StoreProductRequest extends FormRequest
             'description' => 'nullable|string',
             'default_unit_id' => 'required|integer|exists:units_of_measurement,id',
             'list_price' => 'required|numeric|min:0',
+            'production_quantity' => 'nullable|numeric|min:0.0001',
             'is_active' => 'boolean',
         ];
     }

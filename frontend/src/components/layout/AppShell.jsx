@@ -4,6 +4,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  Factory,
   LayoutDashboard,
   Layers,
   Menu,
@@ -18,7 +19,8 @@ const navItems = [
   { label: 'Dashboard', shortLabel: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
   { label: 'Products', shortLabel: 'Products', path: '/products', icon: Package },
   { label: 'Materials', shortLabel: 'Materials', path: '/materials', icon: Layers },
-  { label: 'Bill of Materials', shortLabel: 'BOM', path: '/bom', icon: ClipboardList },
+  { label: 'Manufacturing', shortLabel: 'Mfg', path: '/bom', icon: ClipboardList, matchPrefix: '/bom' },
+  { label: 'Production', shortLabel: 'Prod', path: '/production', icon: Factory },
   { label: 'Units', shortLabel: 'Units', path: '/units', icon: Ruler },
   { label: 'Utilities', shortLabel: 'Utilities', path: '/utilities', icon: Zap },
 ]
@@ -67,6 +69,9 @@ function AppShell({ children }) {
                 className={({ isActive }) =>
                   isActive ? 'sidebar__link active' : 'sidebar__link'
                 }
+                isActive={item.matchPrefix
+                  ? (_, location) => location.pathname.startsWith(item.matchPrefix)
+                  : undefined}
                 title={collapsed ? item.label : undefined}
                 onClick={closeMobile}
               >
