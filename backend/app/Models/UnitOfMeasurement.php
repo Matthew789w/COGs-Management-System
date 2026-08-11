@@ -11,6 +11,8 @@ class UnitOfMeasurement extends Model
 {
     use HasFactory;
 
+    protected $table = 'units_of_measurement';
+
     protected $fillable = [
         'code',
         'name',

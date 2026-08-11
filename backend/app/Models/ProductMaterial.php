@@ -15,10 +15,12 @@ class ProductMaterial extends Model
         'material_id',
         'unit_id',
         'quantity',
+        'position',
     ];
 
     protected $casts = [
         'quantity' => 'decimal:4',
+        'position' => 'integer',
     ];
 
     public function product(): BelongsTo

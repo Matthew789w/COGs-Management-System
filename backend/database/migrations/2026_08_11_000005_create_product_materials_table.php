@@ -17,6 +17,7 @@ return new class extends Migration
             $table->foreignId('material_id')->constrained('materials')->onDelete('restrict')->onUpdate('cascade');
             $table->foreignId('unit_id')->constrained('units_of_measurement')->onDelete('restrict')->onUpdate('cascade');
             $table->decimal('quantity', 12, 4);
+            $table->integer('position')->default(0);
             $table->timestamps();
 
             $table->unique(['product_id', 'material_id']);
