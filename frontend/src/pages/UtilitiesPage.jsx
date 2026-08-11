@@ -8,6 +8,7 @@ import DataTableToolbar from '../components/ui/DataTableToolbar'
 import EmptyState from '../components/ui/EmptyState'
 import PageHeader from '../components/ui/PageHeader'
 import PanelHeader from '../components/ui/PanelHeader'
+import TableLoadingState from '../components/ui/TableLoadingState'
 import TablePagination from '../components/ui/TablePagination'
 import { formatPeso } from '../utils/currency'
 
@@ -54,7 +55,7 @@ function UtilitiesPage() {
         description="Manage utility rates, consumption units, and cost drivers for product costing."
         action={
           <Link to="/utilities/create">
-            <Button variant="secondary" icon={Plus}>Add utility</Button>
+            <Button variant="primary" icon={Plus}>Add utility</Button>
           </Link>
         }
       />
@@ -78,7 +79,7 @@ function UtilitiesPage() {
             </thead>
             <tbody className="table__body">
               {loading ? (
-                <tr><td colSpan={6} className="empty-state">Loading utilities...</td></tr>
+                <TableLoadingState colSpan={6} message="Loading utilities…" />
               ) : paginatedUtilities.length === 0 ? (
                 <tr>
                   <td colSpan={6}>

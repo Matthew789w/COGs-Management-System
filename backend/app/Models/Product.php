@@ -66,4 +66,9 @@ class Product extends Model
     {
         return $this->hasMany(ProductOverhead::class);
     }
+
+    public function productionBatches(): HasMany
+    {
+        return $this->hasMany(ProductionBatch::class);
+    }
 }

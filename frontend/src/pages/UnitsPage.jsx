@@ -8,6 +8,7 @@ import DataTableToolbar from '../components/ui/DataTableToolbar'
 import EmptyState from '../components/ui/EmptyState'
 import PageHeader from '../components/ui/PageHeader'
 import PanelHeader from '../components/ui/PanelHeader'
+import TableLoadingState from '../components/ui/TableLoadingState'
 import TablePagination from '../components/ui/TablePagination'
 
 const PAGE_SIZE = 10
@@ -78,7 +79,7 @@ function UnitsPage() {
             </thead>
             <tbody className="table__body">
               {loading ? (
-                <tr><td colSpan={6} className="empty-state">Loading units...</td></tr>
+                <TableLoadingState colSpan={6} message="Loading units…" />
               ) : paginatedUnits.length === 0 ? (
                 <tr>
                   <td colSpan={6}>

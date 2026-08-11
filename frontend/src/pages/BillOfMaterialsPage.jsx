@@ -3,10 +3,11 @@ import axios from 'axios'
 import { Building2, Calculator, ClipboardList, Pencil, Trash2, TrendingUp, Users, Zap } from 'lucide-react'
 import ManufacturingNav from '../components/manufacturing/ManufacturingNav'
 import Button from '../components/ui/Button'
-import Card from '../components/ui/Card'
+import CollapsibleSection from '../components/ui/CollapsibleSection'
 import EmptyState from '../components/ui/EmptyState'
 import PageHeader from '../components/ui/PageHeader'
 import PanelHeader from '../components/ui/PanelHeader'
+import SelectField from '../components/ui/SelectField'
 import { formatPeso } from '../utils/currency'
 import { formatOverheadCategory, OVERHEAD_CATEGORIES } from '../utils/manufacturing'
 import { formatQuantity, normalizeQuantityInput } from '../utils/quantity'
@@ -63,6 +64,10 @@ function BillOfMaterialsPage() {
   const [utilityFormError, setUtilityFormError] = useState('')
   const [laborFormError, setLaborFormError] = useState('')
   const [overheadFormError, setOverheadFormError] = useState('')
+  const [loadingProducts, setLoadingProducts] = useState(true)
+  const [loadingMaterials, setLoadingMaterials] = useState(true)
+  const [loadingUnits, setLoadingUnits] = useState(true)
+  const [loadingUtilities, setLoadingUtilities] = useState(true)
 
   const selectedProductRecord = useMemo(() => {
     return products.find((product) => product.id === Number(selectedProduct)) || null
@@ -112,10 +117,22 @@ function BillOfMaterialsPage() {
   }, [fetchCosting, fetchPricing])
 
   useEffect(() => {
-    axios.get('/api/products').then((response) => setProducts(response.data.data))
-    axios.get('/api/materials').then((response) => setMaterials(response.data.data))
-    axios.get('/api/units').then((response) => setUnits(response.data.data))
-    axios.get('/api/utilities').then((response) => setUtilities(response.data.data))
+    axios
+      .get('/api/products')
+      .then((response) => setProducts(response.data.data || []))
+      .finally(() => setLoadingProducts(false))
+    axios
+      .get('/api/materials')
+      .then((response) => setMaterials(response.data.data || []))
+      .finally(() => setLoadingMaterials(false))
+    axios
+      .get('/api/units')
+      .then((response) => setUnits(response.data.data || []))
+      .finally(() => setLoadingUnits(false))
+    axios
+      .get('/api/utilities')
+      .then((response) => setUtilities(response.data.data || []))
+      .finally(() => setLoadingUtilities(false))
   }, [])
 
   useEffect(() => {
@@ -674,71 +691,86 @@ function BillOfMaterialsPage() {
 
       <ManufacturingNav />
 
-      <Card>
-        <PanelHeader title="Product selection" />
-        <p className="page-header__description" style={{ margin: '0 0 16px' }}>
-          Choose the product you want to configure.
-        </p>
-        <div className="form-field">
-          <label htmlFor="product-select">Product</label>
-          <select
-            id="product-select"
-            value={selectedProduct}
-            onChange={(event) => setSelectedProduct(event.target.value)}
-          >
-            <option value="">Select a product</option>
-            {products.map((product) => (
-              <option key={product.id} value={product.id}>
-                {product.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      </Card>
+      <CollapsibleSection
+        title="Product selection"
+        description="Choose the product you want to configure."
+        defaultOpen
+      >
+        <SelectField
+          id="product-select"
+          label="Product"
+          value={selectedProduct}
+          onChange={(event) => setSelectedProduct(event.target.value)}
+          loading={loadingProducts}
+          loadingMessage="Loading products…"
+          placeholder="Select a product"
+        >
+          {products.map((product) => (
+            <option key={product.id} value={product.id}>
+              {product.name}
+            </option>
+          ))}
+        </SelectField>
+      </CollapsibleSection>
 
       {selectedProduct && (
         <>
-          <Card>
-            <PanelHeader title={`BOM editor for ${selectedProductName}`} />
+          <CollapsibleSection
+            title="Bill of Materials"
+            description="Define raw materials and quantities per production batch."
+            defaultOpen
+            action={
+              costing && (
+                <div className="bom-summary">
+                  <strong>Total material cost:</strong>
+                  <span className="bom-summary__value">{formatPeso(costing.total_material_cost)}</span>
+                </div>
+              )
+            }
+          >
+            <PanelHeader
+              title={`BOM editor for ${selectedProductName}`}
+              className="collapsible-section__subheader"
+            />
             <p className="page-header__description" style={{ margin: '0 0 20px' }}>
               Select a unit to filter materials, or pick a material to auto-assign its unit.
             </p>
 
             <div className="bom-editor">
               <div className="form-grid form-grid--bom">
-                <div className="form-field">
-                  <label htmlFor="bom-material">Material</label>
-                  <select
-                    id="bom-material"
-                    value={editorValues.material_id}
-                    onChange={(event) => handleEditorChange('material_id', event.target.value)}
-                  >
-                    <option value="">Select material</option>
-                    {editorMaterialOptions.map((material) => (
-                      <option key={material.id} value={material.id}>
-                        {material.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <SelectField
+                  id="bom-material"
+                  label="Material"
+                  value={editorValues.material_id}
+                  onChange={(event) => handleEditorChange('material_id', event.target.value)}
+                  loading={loadingMaterials}
+                  loadingMessage="Loading materials…"
+                  placeholder="Select material"
+                >
+                  {editorMaterialOptions.map((material) => (
+                    <option key={material.id} value={material.id}>
+                      {material.name}
+                    </option>
+                  ))}
+                </SelectField>
 
-                <div className="form-field">
-                  <label htmlFor="bom-unit">Unit</label>
-                  <select
-                    id="bom-unit"
-                    value={editorValues.unit_id}
-                    onChange={(event) => handleEditorChange('unit_id', event.target.value)}
-                    disabled={isUnitLocked}
-                    title={isUnitLocked ? 'Unit is set automatically from the selected material' : undefined}
-                  >
-                    <option value="">Select unit</option>
-                    {units.map((unit) => (
-                      <option key={unit.id} value={unit.id}>
-                        {unit.name} ({unit.symbol})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <SelectField
+                  id="bom-unit"
+                  label="Unit"
+                  value={editorValues.unit_id}
+                  onChange={(event) => handleEditorChange('unit_id', event.target.value)}
+                  disabled={isUnitLocked}
+                  loading={loadingUnits}
+                  loadingMessage="Loading units…"
+                  placeholder="Select unit"
+                  title={isUnitLocked ? 'Unit is set automatically from the selected material' : undefined}
+                >
+                  {units.map((unit) => (
+                    <option key={unit.id} value={unit.id}>
+                      {unit.name} ({unit.symbol})
+                    </option>
+                  ))}
+                </SelectField>
 
                 <div className="form-field">
                   <label htmlFor="bom-quantity">Quantity</label>
@@ -777,19 +809,10 @@ function BillOfMaterialsPage() {
                 </Button>
               </div>
             </div>
-          </Card>
 
-          <Card>
             <PanelHeader
               title="BOM items"
-              action={
-                costing && (
-                  <div className="bom-summary">
-                    <strong>Total material cost:</strong>
-                    <span className="bom-summary__value">{formatPeso(costing.total_material_cost)}</span>
-                  </div>
-                )
-              }
+              className="collapsible-section__subheader collapsible-section__subheader--spaced"
             />
             <p className="page-header__description" style={{ margin: '0 0 16px' }}>
               Review and manage the material list for this product.
@@ -860,31 +883,45 @@ function BillOfMaterialsPage() {
                 </tbody>
               </table>
             </div>
-          </Card>
+          </CollapsibleSection>
 
-          <Card>
-            <PanelHeader title={`Utility usage for ${selectedProductName}`} />
+          <CollapsibleSection
+            title="Utilities"
+            description="Electricity, water, LPG, fuel, and other manufacturing utilities."
+            action={
+              costing && (
+                <div className="bom-summary">
+                  <strong>Total utility cost:</strong>
+                  <span className="bom-summary__value">{formatPeso(costing.total_utility_cost)}</span>
+                </div>
+              )
+            }
+          >
+            <PanelHeader
+              title={`Utility usage for ${selectedProductName}`}
+              className="collapsible-section__subheader"
+            />
             <p className="page-header__description" style={{ margin: '0 0 20px' }}>
               Assign manufacturing utilities such as electricity, water, LPG, or fuel. Unit and rate come from the utility master record.
             </p>
 
             <div className="bom-editor">
               <div className="form-grid form-grid--utility">
-                <div className="form-field">
-                  <label htmlFor="utility-select">Utility</label>
-                  <select
-                    id="utility-select"
-                    value={utilityEditorValues.utility_id}
-                    onChange={(event) => handleUtilityEditorChange('utility_id', event.target.value)}
-                  >
-                    <option value="">Select utility</option>
-                    {editorUtilityOptions.map((utility) => (
-                      <option key={utility.id} value={utility.id}>
-                        {utility.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <SelectField
+                  id="utility-select"
+                  label="Utility"
+                  value={utilityEditorValues.utility_id}
+                  onChange={(event) => handleUtilityEditorChange('utility_id', event.target.value)}
+                  loading={loadingUtilities}
+                  loadingMessage="Loading utilities…"
+                  placeholder="Select utility"
+                >
+                  {editorUtilityOptions.map((utility) => (
+                    <option key={utility.id} value={utility.id}>
+                      {utility.name}
+                    </option>
+                  ))}
+                </SelectField>
 
                 <div className="form-field">
                   <label>Unit</label>
@@ -933,19 +970,10 @@ function BillOfMaterialsPage() {
                 </Button>
               </div>
             </div>
-          </Card>
 
-          <Card>
             <PanelHeader
               title="Utility usage"
-              action={
-                costing && (
-                  <div className="bom-summary">
-                    <strong>Total utility cost:</strong>
-                    <span className="bom-summary__value">{formatPeso(costing.total_utility_cost)}</span>
-                  </div>
-                )
-              }
+              className="collapsible-section__subheader collapsible-section__subheader--spaced"
             />
             <p className="page-header__description" style={{ margin: '0 0 16px' }}>
               Review utility consumption and costs for this product.
@@ -1012,10 +1040,24 @@ function BillOfMaterialsPage() {
                 </tbody>
               </table>
             </div>
-          </Card>
+          </CollapsibleSection>
 
-          <Card>
-            <PanelHeader title={`Direct labor for ${selectedProductName}`} />
+          <CollapsibleSection
+            title="Direct Labor"
+            description="Worker roles, hours, and hourly rates for this batch."
+            action={
+              costing && (
+                <div className="bom-summary">
+                  <strong>Total labor cost:</strong>
+                  <span className="bom-summary__value">{formatPeso(costing.total_labor_cost)}</span>
+                </div>
+              )
+            }
+          >
+            <PanelHeader
+              title={`Direct labor for ${selectedProductName}`}
+              className="collapsible-section__subheader"
+            />
             <p className="page-header__description" style={{ margin: '0 0 20px' }}>
               Define labor roles, worker count, hours worked, and hourly rates for this product batch.
             </p>
@@ -1090,19 +1132,10 @@ function BillOfMaterialsPage() {
                 </Button>
               </div>
             </div>
-          </Card>
 
-          <Card>
             <PanelHeader
               title="Direct labor"
-              action={
-                costing && (
-                  <div className="bom-summary">
-                    <strong>Total labor cost:</strong>
-                    <span className="bom-summary__value">{formatPeso(costing.total_labor_cost)}</span>
-                  </div>
-                )
-              }
+              className="collapsible-section__subheader collapsible-section__subheader--spaced"
             />
             <p className="page-header__description" style={{ margin: '0 0 16px' }}>
               Review direct labor assignments and costs for this product.
@@ -1169,10 +1202,24 @@ function BillOfMaterialsPage() {
                 </tbody>
               </table>
             </div>
-          </Card>
+          </CollapsibleSection>
 
-          <Card>
-            <PanelHeader title={`Manufacturing overhead for ${selectedProductName}`} />
+          <CollapsibleSection
+            title="Manufacturing Overhead"
+            description="Depreciation, rent, maintenance, and other batch overhead."
+            action={
+              costing && (
+                <div className="bom-summary">
+                  <strong>Total overhead cost:</strong>
+                  <span className="bom-summary__value">{formatPeso(costing.total_overhead_cost)}</span>
+                </div>
+              )
+            }
+          >
+            <PanelHeader
+              title={`Manufacturing overhead for ${selectedProductName}`}
+              className="collapsible-section__subheader"
+            />
             <p className="page-header__description" style={{ margin: '0 0 20px' }}>
               Allocate batch overhead such as depreciation, rent, maintenance, or machine usage to this product.
             </p>
@@ -1238,19 +1285,10 @@ function BillOfMaterialsPage() {
                 </Button>
               </div>
             </div>
-          </Card>
 
-          <Card>
             <PanelHeader
               title="Manufacturing overhead"
-              action={
-                costing && (
-                  <div className="bom-summary">
-                    <strong>Total overhead cost:</strong>
-                    <span className="bom-summary__value">{formatPeso(costing.total_overhead_cost)}</span>
-                  </div>
-                )
-              }
+              className="collapsible-section__subheader collapsible-section__subheader--spaced"
             />
             <p className="page-header__description" style={{ margin: '0 0 16px' }}>
               Review overhead allocations assigned to this production batch.
@@ -1315,24 +1353,21 @@ function BillOfMaterialsPage() {
                 </tbody>
               </table>
             </div>
-          </Card>
+          </CollapsibleSection>
 
-          <Card>
-            <PanelHeader
-              title={`Product costing for ${selectedProductName}`}
-              action={
-                costing && (
-                  <div className="bom-summary">
-                    <strong>COGS per unit:</strong>
-                    <span className="bom-summary__value">{formatPeso(costing.cogs_per_unit, 4)}</span>
-                  </div>
-                )
-              }
-            />
-            <p className="page-header__description" style={{ margin: '0 0 20px' }}>
-              Authoritative manufacturing cost breakdown calculated by the backend costing engine.
-            </p>
-
+          <CollapsibleSection
+            title={`Product costing for ${selectedProductName}`}
+            description="Authoritative manufacturing cost breakdown from the backend costing engine."
+            defaultOpen
+            action={
+              costing && (
+                <div className="bom-summary">
+                  <strong>COGS per unit:</strong>
+                  <span className="bom-summary__value">{formatPeso(costing.cogs_per_unit, 4)}</span>
+                </div>
+              )
+            }
+          >
             <div className="production-quantity-row">
               <div className="form-field">
                 <label htmlFor="production-quantity">Production quantity</label>
@@ -1403,24 +1438,21 @@ function BillOfMaterialsPage() {
                 description="Configure materials and utilities to generate the product cost breakdown."
               />
             )}
-          </Card>
+          </CollapsibleSection>
 
-          <Card>
-            <PanelHeader
-              title={`Pricing for ${selectedProductName}`}
-              action={
-                pricing && (
-                  <div className="bom-summary">
-                    <strong>Recommended price:</strong>
-                    <span className="bom-summary__value">{formatPeso(pricing.recommended_selling_price, 4)}</span>
-                  </div>
-                )
-              }
-            />
-            <p className="page-header__description" style={{ margin: '0 0 20px' }}>
-              Set a target profit margin to calculate the recommended selling price from backend COGS.
-            </p>
-
+          <CollapsibleSection
+            title={`Pricing for ${selectedProductName}`}
+            description="Calculate recommended selling price from COGS and target profit margin."
+            defaultOpen
+            action={
+              pricing && (
+                <div className="bom-summary">
+                  <strong>Recommended price:</strong>
+                  <span className="bom-summary__value">{formatPeso(pricing.recommended_selling_price, 4)}</span>
+                </div>
+              )
+            }
+          >
             <div className="production-quantity-row">
               <div className="form-field">
                 <label htmlFor="profit-margin">Target profit margin (%)</label>
@@ -1477,7 +1509,7 @@ function BillOfMaterialsPage() {
                 description="Enter a target profit margin and calculate the recommended selling price."
               />
             )}
-          </Card>
+          </CollapsibleSection>
         </>
       )}
     </div>

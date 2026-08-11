@@ -101,6 +101,34 @@ class ProductPricingServiceTest extends TestCase
         $this->assertSame(20.0, $result->cogsPerUnit);
         $this->assertSame(26.6667, $result->recommendedSellingPrice);
         $this->assertSame(6.6667, $result->expectedProfitPerUnit);
+        $this->assertSame(25.0, $result->expectedProfitPercentage);
+    }
+
+    public function test_it_reports_target_margin_as_expected_profit_percentage_after_rounding(): void
+    {
+        $unit = UnitOfMeasurement::factory()->create();
+        $product = Product::factory()->create([
+            'default_unit_id' => $unit->id,
+            'production_quantity' => 1,
+        ]);
+        $material = Material::factory()->create([
+            'unit_id' => $unit->id,
+            'cost_per_unit' => 19.1977,
+        ]);
+
+        ProductMaterial::factory()->create([
+            'product_id' => $product->id,
+            'material_id' => $material->id,
+            'unit_id' => $unit->id,
+            'quantity' => 1,
+        ]);
+
+        $result = $this->service->calculate($product->fresh(), 20);
+
+        $this->assertSame(19.1977, $result->cogsPerUnit);
+        $this->assertSame(23.9971, $result->recommendedSellingPrice);
+        $this->assertSame(4.7994, $result->expectedProfitPerUnit);
+        $this->assertSame(20.0, $result->expectedProfitPercentage);
     }
 
     public function test_it_rejects_zero_profit_margin(): void

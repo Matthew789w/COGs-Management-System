@@ -1,8 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import {
   Bell,
-  ChevronLeft,
-  ChevronRight,
   ClipboardList,
   Factory,
   LayoutDashboard,
@@ -11,9 +9,11 @@ import {
   Package,
   Ruler,
   Search,
+  Warehouse,
   Zap,
 } from 'lucide-react'
 import { useSidebar } from '../../hooks/useSidebar'
+import BrandLogo from './BrandLogo'
 
 const navItems = [
   { label: 'Dashboard', shortLabel: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
@@ -21,6 +21,7 @@ const navItems = [
   { label: 'Materials', shortLabel: 'Materials', path: '/materials', icon: Layers },
   { label: 'Manufacturing', shortLabel: 'Mfg', path: '/bom', icon: ClipboardList, matchPrefix: '/bom' },
   { label: 'Production', shortLabel: 'Prod', path: '/production', icon: Factory },
+  { label: 'Inventory', shortLabel: 'Inv', path: '/inventory', icon: Warehouse },
   { label: 'Units', shortLabel: 'Units', path: '/units', icon: Ruler },
   { label: 'Utilities', shortLabel: 'Utilities', path: '/utilities', icon: Zap },
 ]
@@ -42,11 +43,11 @@ function AppShell({ children }) {
         <div className="sidebar__top">
           <div className="sidebar__brand">
             <div className="sidebar__brand-logo" aria-hidden="true">
-              COG
+              <BrandLogo className="sidebar__brand-logo-icon" />
             </div>
             <div className="sidebar__brand-text">
               <strong>COGs System</strong>
-              <span>Master Data</span>
+              <span>Manufacturing &amp; Costing</span>
             </div>
           </div>
           <button
@@ -55,7 +56,7 @@ function AppShell({ children }) {
             onClick={toggleCollapsed}
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
-            {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+            <Menu size={18} />
           </button>
         </div>
 
@@ -66,12 +67,16 @@ function AppShell({ children }) {
               <NavLink
                 key={item.path}
                 to={item.path}
+                end={item.path === '/dashboard' || item.path === '/inventory'}
                 className={({ isActive }) =>
                   isActive ? 'sidebar__link active' : 'sidebar__link'
                 }
-                isActive={item.matchPrefix
-                  ? (_, location) => location.pathname.startsWith(item.matchPrefix)
-                  : undefined}
+                {...(item.matchPrefix
+                  ? {
+                      isActive: (_match, location) =>
+                        location.pathname.startsWith(item.matchPrefix),
+                    }
+                  : {})}
                 title={collapsed ? item.label : undefined}
                 onClick={closeMobile}
               >

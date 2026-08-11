@@ -2,21 +2,22 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import axios from 'axios'
 import { FileText, Printer } from 'lucide-react'
 import ManufacturingNav from '../components/manufacturing/ManufacturingNav'
+import ReportsNav from '../components/reports/ReportsNav'
 import Button from '../components/ui/Button'
-import Card from '../components/ui/Card'
+import CollapsibleSection from '../components/ui/CollapsibleSection'
 import EmptyState from '../components/ui/EmptyState'
 import PageHeader from '../components/ui/PageHeader'
-import PanelHeader from '../components/ui/PanelHeader'
+import SelectField from '../components/ui/SelectField'
+import TableLoadingState from '../components/ui/TableLoadingState'
 import { formatPeso } from '../utils/currency'
 import { formatOverheadCategory } from '../utils/manufacturing'
 import { formatQuantity } from '../utils/quantity'
 
-function ReportSection({ title, children }) {
+function ReportSection({ title, children, defaultOpen = true }) {
   return (
-    <section className="report-section">
-      <h3 className="report-section__title">{title}</h3>
+    <CollapsibleSection title={title} variant="plain" defaultOpen={defaultOpen}>
       {children}
-    </section>
+    </CollapsibleSection>
   )
 }
 
@@ -38,6 +39,7 @@ function ManufacturingReportPage() {
   const [report, setReport] = useState(null)
   const [summaryRows, setSummaryRows] = useState([])
   const [summaryLoading, setSummaryLoading] = useState(true)
+  const [loadingProducts, setLoadingProducts] = useState(true)
 
   const selectedProductRecord = useMemo(
     () => products.find((product) => product.id === Number(selectedProduct)) || null,
@@ -45,9 +47,12 @@ function ManufacturingReportPage() {
   )
 
   useEffect(() => {
-    axios.get('/api/products').then((response) => {
-      setProducts(response.data.data || [])
-    })
+    axios
+      .get('/api/products')
+      .then((response) => {
+        setProducts(response.data.data || [])
+      })
+      .finally(() => setLoadingProducts(false))
   }, [])
 
   const loadProductSummary = useCallback(async (productList) => {
@@ -174,24 +179,32 @@ function ManufacturingReportPage() {
 
       <ManufacturingNav />
 
-      <Card className="no-print">
-        <PanelHeader title="Product selection" />
+      <div className="reports-layout">
+        <ReportsNav />
+
+        <div className="reports-layout__content">
+      <CollapsibleSection
+        title="Product selection"
+        description="Choose a product and profit margin for the detailed report."
+        defaultOpen
+        className="no-print"
+      >
         <div className="form-grid form-grid--2">
-          <div className="form-field">
-            <label htmlFor="report-product">Product</label>
-            <select
-              id="report-product"
-              value={selectedProduct}
-              onChange={(event) => setSelectedProduct(event.target.value)}
-            >
-              <option value="">Select a product for detailed report</option>
-              {products.map((product) => (
-                <option key={product.id} value={product.id}>
-                  {product.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <SelectField
+            id="report-product"
+            label="Product"
+            value={selectedProduct}
+            onChange={(event) => setSelectedProduct(event.target.value)}
+            loading={loadingProducts}
+            loadingMessage="Loading products…"
+            placeholder="Select a product for detailed report"
+          >
+            {products.map((product) => (
+              <option key={product.id} value={product.id}>
+                {product.name}
+              </option>
+            ))}
+          </SelectField>
           <div className="form-field">
             <label htmlFor="report-margin">Target profit margin (%)</label>
             <input
@@ -205,16 +218,30 @@ function ManufacturingReportPage() {
             />
           </div>
         </div>
-      </Card>
+      </CollapsibleSection>
 
-      <Card>
-        <PanelHeader title="All products — manufacturing summary" />
-        <p className="page-header__description" style={{ margin: '0 0 16px' }}>
-          COGS overview across all products using each product&apos;s configured recipe batch size.
-        </p>
-
+      <CollapsibleSection
+        title="All products — manufacturing summary"
+        description="COGS overview across all products using each product's configured recipe batch size."
+        defaultOpen
+      >
         {summaryLoading ? (
-          <p className="page-header__description">Loading summary…</p>
+          <div className="table-wrapper">
+            <table className="table">
+              <thead className="table__head">
+                <tr>
+                  <th>Product</th>
+                  <th className="table__col-num">Recipe batch</th>
+                  <th className="table__col-num">Total mfg. cost</th>
+                  <th className="table__col-num">COGS / unit</th>
+                  <th className="table__col-status">Status</th>
+                </tr>
+              </thead>
+              <tbody className="table__body">
+                <TableLoadingState colSpan={5} message="Loading summary…" />
+              </tbody>
+            </table>
+          </div>
         ) : summaryRows.length === 0 ? (
           <EmptyState
             icon={FileText}
@@ -257,26 +284,39 @@ function ManufacturingReportPage() {
             </table>
           </div>
         )}
-      </Card>
+      </CollapsibleSection>
 
       {selectedProduct && (
-        <Card className="report-document">
-          <div className="report-document__header">
-            <div>
-              <h2 className="report-document__title">
-                Manufacturing report — {selectedProductRecord?.name}
-              </h2>
-              <p className="report-document__meta">Generated {generatedAt}</p>
-            </div>
-            {report?.costing && (
+        <CollapsibleSection
+          title={`Detailed report — ${selectedProductRecord?.name}`}
+          description={generatedAt ? `Generated ${generatedAt}` : 'Product manufacturing breakdown'}
+          defaultOpen
+          className="report-document"
+          action={
+            report?.costing ? (
               <div className="report-document__badge">
                 COGS / unit: {formatPeso(report.costing.cogs_per_unit, 4)}
               </div>
-            )}
-          </div>
-
+            ) : null
+          }
+        >
           {loading ? (
-            <p className="page-header__description">Loading report…</p>
+            <div className="table-wrapper">
+              <table className="table">
+                <thead className="table__head">
+                  <tr>
+                    <th>Section</th>
+                    <th>Item</th>
+                    <th className="table__col-num">Quantity</th>
+                    <th className="table__col-num">Unit cost</th>
+                    <th className="table__col-num">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="table__body">
+                  <TableLoadingState colSpan={5} message="Loading report…" rows={6} />
+                </tbody>
+              </table>
+            </div>
           ) : error ? (
             <p className="form-error">{error}</p>
           ) : !report ? (
@@ -547,8 +587,10 @@ function ManufacturingReportPage() {
               </ReportSection>
             </>
           )}
-        </Card>
+        </CollapsibleSection>
       )}
+        </div>
+      </div>
     </div>
   )
 }

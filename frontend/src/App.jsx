@@ -23,7 +23,10 @@ import EditUtilityPage from './pages/EditUtilityPage'
 import DeleteUtilityPage from './pages/DeleteUtilityPage'
 import BillOfMaterialsPage from './pages/BillOfMaterialsPage'
 import ManufacturingReportPage from './pages/ManufacturingReportPage'
+import CogsReportPage from './pages/reports/CogsReportPage'
+import ReportsHubPage from './pages/reports/ReportsHubPage'
 import ProductionPage from './pages/ProductionPage'
+import InventoryPage from './pages/InventoryPage'
 import './App.css'
 
 function App() {
@@ -33,6 +36,8 @@ function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/inventory" element={<InventoryPage />} />
+          <Route path="/production" element={<ProductionPage />} />
           <Route path="/products" element={<ProductsPage />} />
           <Route path="/products/create" element={<CreateProductPage />} />
           <Route path="/products/:id/edit" element={<EditProductPage />} />
@@ -44,8 +49,9 @@ function App() {
           <Route path="/materials/:id/delete" element={<DeleteMaterialPage />} />
           <Route path="/materials/:id" element={<ViewMaterialPage />} />
           <Route path="/bom" element={<BillOfMaterialsPage />} />
-          <Route path="/bom/reports" element={<ManufacturingReportPage />} />
-          <Route path="/production" element={<ProductionPage />} />
+          <Route path="/bom/reports/manufacturing-summary" element={<ManufacturingReportPage />} />
+          <Route path="/bom/reports/cogs/:reportSlug" element={<CogsReportPage />} />
+          <Route path="/bom/reports" element={<ReportsHubPage />} />
           <Route path="/units" element={<UnitsPage />} />
           <Route path="/units/create" element={<CreateUnitPage />} />
           <Route path="/units/:id/edit" element={<EditUnitPage />} />

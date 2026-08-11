@@ -19,6 +19,11 @@ class ProductionBatchResource extends JsonResource
             'confirmed_at' => optional($this->confirmed_at)->toDatetimeString(),
             'notes' => $this->notes,
             'batch_materials' => ProductionBatchMaterialResource::collection($this->whenLoaded('batchMaterials')),
+            'shortfalls' => $this->when(isset($this->shortfalls), $this->shortfalls),
+            'all_materials_sufficient' => $this->when(
+                isset($this->all_materials_sufficient),
+                (bool) $this->all_materials_sufficient,
+            ),
             'created_at' => optional($this->created_at)->toDatetimeString(),
             'updated_at' => optional($this->updated_at)->toDatetimeString(),
         ];

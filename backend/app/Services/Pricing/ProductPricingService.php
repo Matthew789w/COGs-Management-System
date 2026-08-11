@@ -35,9 +35,10 @@ class ProductPricingService
 
         $recommendedSellingPrice = round($cogsPerUnit / $divisor, 4);
         $expectedProfitPerUnit = round($recommendedSellingPrice - $cogsPerUnit, 4);
-        $expectedProfitPercentage = $recommendedSellingPrice > 0
-            ? round(($expectedProfitPerUnit / $recommendedSellingPrice) * 100, 4)
-            : 0.0;
+        // Margin is defined on selling price and price is derived from the target margin,
+        // so the expected profit percentage matches the target — not a back-calculation
+        // from rounded peso amounts (which can show 19.9999% instead of 20%).
+        $expectedProfitPercentage = round($profitMarginPercent, 4);
 
         return new ProductPricingResult(
             productId: $product->id,

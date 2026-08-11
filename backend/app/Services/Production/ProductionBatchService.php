@@ -4,7 +4,6 @@ namespace App\Services\Production;
 
 use App\Models\ProductionBatch;
 use App\Models\ProductionBatchMaterial;
-use App\Models\Product;
 use App\Services\Inventory\InventoryService;
 use App\Services\Production\Exceptions\InsufficientInventoryException;
 use App\Services\Production\Exceptions\ProductionBatchNotConfirmableException;
@@ -46,31 +45,26 @@ class ProductionBatchService
         return DB::transaction(function () use ($batch) {
             $batch = ProductionBatch::query()
                 ->lockForUpdate()
-                ->with(['product', 'batchMaterials.material'])
+                ->with(['product.defaultUnit'])
                 ->findOrFail($batch->id);
 
             if (! $batch->isDraft()) {
                 throw new ProductionBatchNotConfirmableException();
             }
 
+            $this->snapshotRequirements($batch);
+            $batch->load(['batchMaterials.material', 'batchMaterials.unit']);
+
             if ($batch->batchMaterials->isEmpty()) {
-                $this->snapshotRequirements($batch);
-                $batch->load('batchMaterials.material');
+                throw new ProductionBatchNotConfirmableException(
+                    'Cannot confirm production without bill of materials.',
+                );
             }
 
-            $shortfalls = [];
-
-            foreach ($batch->batchMaterials as $line) {
-                $available = $this->inventoryService->getMaterialBalance($line->material_id);
-                if ($available < (float) $line->required_quantity) {
-                    $shortfalls[] = [
-                        'material_id' => $line->material_id,
-                        'material_name' => $line->material->name,
-                        'required' => (float) $line->required_quantity,
-                        'available' => $available,
-                    ];
-                }
-            }
+            $shortfalls = $this->inventoryService->getMaterialShortfalls(
+                $batch->batchMaterials,
+                lockForUpdate: true,
+            );
 
             if ($shortfalls !== []) {
                 throw new InsufficientInventoryException($shortfalls);
@@ -105,7 +99,11 @@ class ProductionBatchService
                 'confirmed_at' => now(),
             ]);
 
-            return $batch->fresh(['batchMaterials.material', 'batchMaterials.unit', 'product.defaultUnit']);
+            return $batch->fresh([
+                'batchMaterials.material',
+                'batchMaterials.unit',
+                'product.defaultUnit',
+            ]);
         });
     }
 
@@ -135,5 +133,24 @@ class ProductionBatchService
         }
 
         return sprintf('%s-%04d', $prefix, $sequence);
+    }
+
+    /**
+     * @return array<int, array{material_id: int, material_name: string, required: float, available: float}>
+     */
+    public function getDraftShortfalls(ProductionBatch $batch): array
+    {
+        if (! $batch->isDraft()) {
+            return [];
+        }
+
+        $batch->loadMissing(['batchMaterials.material']);
+
+        if ($batch->batchMaterials->isEmpty()) {
+            $this->snapshotRequirements($batch);
+            $batch->load(['batchMaterials.material']);
+        }
+
+        return $this->inventoryService->getMaterialShortfalls($batch->batchMaterials);
     }
 }

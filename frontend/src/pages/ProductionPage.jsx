@@ -1,13 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import axios from 'axios'
-import { CheckCircle2, Factory, Plus, XCircle } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronRight, Factory, Plus, XCircle } from 'lucide-react'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
-import Card from '../components/ui/Card'
+import CollapsibleSection from '../components/ui/CollapsibleSection'
 import EmptyState from '../components/ui/EmptyState'
 import PageHeader from '../components/ui/PageHeader'
-import PanelHeader from '../components/ui/PanelHeader'
 import QuantityWithUnit from '../components/ui/QuantityWithUnit'
+import SelectField from '../components/ui/SelectField'
+import TableLoadingState from '../components/ui/TableLoadingState'
+import { formatPeso } from '../utils/currency'
 import { formatQuantity } from '../utils/quantity'
 
 const STATUS_VARIANTS = {
@@ -26,7 +29,9 @@ const initialForm = {
 
 function ProductionPage() {
   const [products, setProducts] = useState([])
+  const [loadingProducts, setLoadingProducts] = useState(true)
   const [batches, setBatches] = useState([])
+  const [loadingBatches, setLoadingBatches] = useState(true)
   const [formValues, setFormValues] = useState(initialForm)
   const [requirements, setRequirements] = useState(null)
   const [loadingRequirements, setLoadingRequirements] = useState(false)
@@ -34,15 +39,23 @@ function ProductionPage() {
   const [formError, setFormError] = useState('')
   const [actionError, setActionError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [expandedBatchId, setExpandedBatchId] = useState(null)
 
   const loadBatches = useCallback(() => {
-    axios.get('/api/production-batches').then((response) => {
-      setBatches(response.data.data || [])
-    })
+    setLoadingBatches(true)
+    axios
+      .get('/api/production-batches')
+      .then((response) => {
+        setBatches(response.data.data || [])
+      })
+      .finally(() => setLoadingBatches(false))
   }, [])
 
   useEffect(() => {
-    axios.get('/api/products').then((response) => setProducts(response.data.data || []))
+    axios
+      .get('/api/products')
+      .then((response) => setProducts(response.data.data || []))
+      .finally(() => setLoadingProducts(false))
     loadBatches()
   }, [loadBatches])
 
@@ -126,6 +139,11 @@ function ProductionPage() {
   }
 
   const handleConfirm = async (batch) => {
+    if (batch.all_materials_sufficient === false) {
+      setActionError('Insufficient inventory. Record material receipts before confirming this batch.')
+      return
+    }
+
     setActionError('')
     try {
       await axios.post(`/api/production-batches/${batch.id}/confirm`)
@@ -134,7 +152,7 @@ function ProductionPage() {
       const shortfalls = error.response?.data?.errors?.shortfalls
       if (shortfalls?.length) {
         const details = shortfalls
-          .map((item) => `${item.material_name}: need ${item.required}, have ${item.available}`)
+          .map((item) => `${item.material_name}: need ${formatQuantity(item.required)}, have ${formatQuantity(item.available)}`)
           .join('; ')
         setActionError(`Insufficient inventory — ${details}`)
       } else {
@@ -170,28 +188,27 @@ function ProductionPage() {
         description="Create production batches, preview BOM material requirements, and confirm production to deduct inventory."
       />
 
-      <Card>
-        <PanelHeader title="Create production batch" />
-        <p className="page-header__description" style={{ margin: '0 0 20px' }}>
-          Save as draft first. Inventory is only deducted when you confirm the batch.
-        </p>
-
+      <CollapsibleSection
+        title="Create production batch"
+        description="Save as draft first. Inventory is only deducted when you confirm the batch."
+        defaultOpen
+      >
         <div className="form-grid form-grid--2">
-          <div className="form-field">
-            <label htmlFor="batch-product">Product</label>
-            <select
-              id="batch-product"
-              value={formValues.product_id}
-              onChange={(event) => handleFormChange('product_id', event.target.value)}
-            >
-              <option value="">Select product</option>
-              {products.map((product) => (
-                <option key={product.id} value={product.id}>
-                  {product.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <SelectField
+            id="batch-product"
+            label="Product"
+            value={formValues.product_id}
+            onChange={(event) => handleFormChange('product_id', event.target.value)}
+            loading={loadingProducts}
+            loadingMessage="Loading products…"
+            placeholder="Select product"
+          >
+            {products.map((product) => (
+              <option key={product.id} value={product.id}>
+                {product.name}
+              </option>
+            ))}
+          </SelectField>
 
           <div className="form-field">
             <label htmlFor="batch-number">Batch / reference number</label>
@@ -248,7 +265,22 @@ function ProductionPage() {
               </p>
             )}
             {loadingRequirements ? (
-              <p className="page-header__description">Calculating requirements…</p>
+              <div className="table-wrapper">
+                <table className="table">
+                  <thead className="table__head">
+                    <tr>
+                      <th>Material</th>
+                      <th className="table__col-num">BOM qty</th>
+                      <th className="table__col-num">Required qty</th>
+                      <th className="table__col-num">On hand</th>
+                      <th className="table__col-status">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="table__body">
+                    <TableLoadingState colSpan={5} message="Calculating requirements…" rows={4} />
+                  </tbody>
+                </table>
+              </div>
             ) : requirementsError ? (
               <p className="form-error">{requirementsError}</p>
             ) : requirements?.materials?.length ? (
@@ -306,10 +338,16 @@ function ProductionPage() {
             Save as draft
           </Button>
         </div>
-      </Card>
+      </CollapsibleSection>
 
-      <Card>
-        <PanelHeader title="Production batches" />
+      <CollapsibleSection
+        title="Production batches"
+        description="Confirming a batch deducts materials and adds finished goods through backend inventory transactions."
+        defaultOpen
+      >
+        <p className="page-header__description" style={{ margin: '0 0 16px' }}>
+          <Link to="/inventory">Manage inventory</Link>
+        </p>
         {actionError && <p className="form-error">{actionError}</p>}
 
         <div className="table-wrapper">
@@ -325,7 +363,9 @@ function ProductionPage() {
               </tr>
             </thead>
             <tbody className="table__body">
-              {batches.length === 0 ? (
+              {loadingBatches ? (
+                <TableLoadingState colSpan={6} message="Loading production batches…" />
+              ) : batches.length === 0 ? (
                 <tr>
                   <td colSpan={6}>
                     <EmptyState
@@ -336,61 +376,148 @@ function ProductionPage() {
                   </td>
                 </tr>
               ) : (
-                batches.map((batch) => (
-                  <tr key={batch.id} className="table__row">
-                    <td className="table__cell-mono">{batch.batch_number}</td>
-                    <td>{batch.product?.name || '—'}</td>
-                    <td className="table__col-num table__cell-mono">
-                      {formatQuantity(batch.production_quantity)}
-                    </td>
-                    <td>{batch.production_date}</td>
-                    <td className="table__col-status">
-                      <Badge variant={STATUS_VARIANTS[batch.status] || 'default'}>
-                        {batch.status}
-                      </Badge>
-                    </td>
-                    <td>
-                      <div className="table__actions">
-                        {batch.status === 'draft' && (
-                          <>
-                            <button
-                              type="button"
-                              className="table-action table-action--view"
-                              title="Confirm production"
-                              aria-label="Confirm production"
-                              onClick={() => handleConfirm(batch)}
-                            >
-                              <CheckCircle2 size={16} strokeWidth={2.25} />
-                            </button>
-                            <button
-                              type="button"
-                              className="table-action table-action--delete"
-                              title="Cancel batch"
-                              aria-label="Cancel batch"
-                              onClick={() => handleCancel(batch)}
-                            >
-                              <XCircle size={16} strokeWidth={2.25} />
-                            </button>
-                            <button
-                              type="button"
-                              className="table-action table-action--delete"
-                              title="Delete draft"
-                              aria-label="Delete draft"
-                              onClick={() => handleDelete(batch)}
-                            >
-                              ×
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                batches.map((batch) => {
+                  const isExpanded = expandedBatchId === batch.id
+                  const canConfirm = batch.status === 'draft' && batch.all_materials_sufficient !== false
+                  const hasMaterials = batch.batch_materials?.length > 0
+
+                  return (
+                    <Fragment key={batch.id}>
+                      <tr className="table__row">
+                        <td className="table__cell-mono">
+                          <button
+                            type="button"
+                            className="batch-expand-btn"
+                            aria-label={isExpanded ? 'Collapse batch details' : 'Expand batch details'}
+                            onClick={() => setExpandedBatchId(isExpanded ? null : batch.id)}
+                            disabled={!hasMaterials}
+                          >
+                            {hasMaterials ? (
+                              isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />
+                            ) : null}
+                            {batch.batch_number}
+                          </button>
+                        </td>
+                        <td>{batch.product?.name || '—'}</td>
+                        <td className="table__col-num table__cell-mono">
+                          {formatQuantity(batch.production_quantity)}
+                        </td>
+                        <td>{batch.production_date}</td>
+                        <td className="table__col-status">
+                          <Badge variant={STATUS_VARIANTS[batch.status] || 'default'}>
+                            {batch.status}
+                          </Badge>
+                          {batch.status === 'draft' && batch.all_materials_sufficient === false && (
+                            <div className="table__cell-muted" style={{ fontSize: '0.75rem', marginTop: 4 }}>
+                              Insufficient stock
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          <div className="table__actions">
+                            {batch.status === 'draft' && (
+                              <>
+                                <button
+                                  type="button"
+                                  className="table-action table-action--view"
+                                  title={
+                                    canConfirm
+                                      ? 'Confirm production'
+                                      : 'Insufficient inventory — record material receipts first'
+                                  }
+                                  aria-label="Confirm production"
+                                  onClick={() => handleConfirm(batch)}
+                                  disabled={!canConfirm}
+                                >
+                                  <CheckCircle2 size={16} strokeWidth={2.25} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="table-action table-action--delete"
+                                  title="Cancel batch"
+                                  aria-label="Cancel batch"
+                                  onClick={() => handleCancel(batch)}
+                                >
+                                  <XCircle size={16} strokeWidth={2.25} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="table-action table-action--delete"
+                                  title="Delete draft"
+                                  aria-label="Delete draft"
+                                  onClick={() => handleDelete(batch)}
+                                >
+                                  ×
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                      {isExpanded && hasMaterials && (
+                        <tr key={`${batch.id}-materials`} className="table__row batch-materials-row">
+                          <td colSpan={6}>
+                            <div className="batch-materials-panel">
+                              <h4 className="costing-section__title">Material consumption</h4>
+                              <div className="table-wrapper">
+                                <table className="table">
+                                  <thead className="table__head">
+                                    <tr>
+                                      <th>Material</th>
+                                      <th className="table__col-num">Required</th>
+                                      <th className="table__col-num">Issued</th>
+                                      <th className="table__col-num">Unit cost</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="table__body">
+                                    {batch.batch_materials.map((item) => (
+                                      <tr key={item.id} className="table__row">
+                                        <td>{item.material?.name || 'Unknown'}</td>
+                                        <td className="table__col-num">
+                                          <QuantityWithUnit
+                                            value={item.required_quantity}
+                                            unit={item.unit?.symbol || '—'}
+                                          />
+                                        </td>
+                                        <td className="table__col-num">
+                                          <QuantityWithUnit
+                                            value={item.issued_quantity ?? 0}
+                                            unit={item.unit?.symbol || '—'}
+                                          />
+                                        </td>
+                                        <td className="table__col-num table__cell-mono">
+                                          {item.unit_cost_snapshot != null
+                                            ? formatPeso(item.unit_cost_snapshot, 4)
+                                            : '—'}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                              {batch.status === 'draft' && batch.shortfalls?.length > 0 && (
+                                <p className="form-error" style={{ marginTop: 12 }}>
+                                  Shortages:{' '}
+                                  {batch.shortfalls
+                                    .map(
+                                      (item) =>
+                                        `${item.material_name} (need ${formatQuantity(item.required)}, have ${formatQuantity(item.available)})`,
+                                    )
+                                    .join('; ')}
+                                </p>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  )
+                })
               )}
             </tbody>
           </table>
         </div>
-      </Card>
+      </CollapsibleSection>
     </div>
   )
 }

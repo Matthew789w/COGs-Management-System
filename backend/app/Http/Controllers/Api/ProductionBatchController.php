@@ -16,9 +16,13 @@ use Illuminate\Http\Request;
 
 class ProductionBatchController extends ApiController
 {
-    public function index(Request $request)
+    public function index(Request $request, ProductionBatchService $batchService)
     {
-        $query = ProductionBatch::with(['product.defaultUnit'])->orderByDesc('production_date');
+        $query = ProductionBatch::with([
+            'product.defaultUnit',
+            'batchMaterials.material',
+            'batchMaterials.unit',
+        ])->orderByDesc('production_date');
 
         if ($request->filled('status')) {
             $query->where('status', $request->query('status'));
@@ -28,8 +32,20 @@ class ProductionBatchController extends ApiController
             $query->where('product_id', $request->query('product_id'));
         }
 
+        $batches = $query->get();
+
+        $batches->each(function (ProductionBatch $batch) use ($batchService) {
+            if (! $batch->isDraft()) {
+                return;
+            }
+
+            $shortfalls = $batchService->getDraftShortfalls($batch);
+            $batch->shortfalls = $shortfalls;
+            $batch->all_materials_sufficient = $shortfalls === [];
+        });
+
         return $this->respondWithSuccess(
-            ProductionBatchResource::collection($query->get())
+            ProductionBatchResource::collection($batches)
         );
     }
 

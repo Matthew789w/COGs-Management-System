@@ -8,6 +8,7 @@ import DataTableToolbar from '../components/ui/DataTableToolbar'
 import EmptyState from '../components/ui/EmptyState'
 import PageHeader from '../components/ui/PageHeader'
 import PanelHeader from '../components/ui/PanelHeader'
+import TableLoadingState from '../components/ui/TableLoadingState'
 import TablePagination from '../components/ui/TablePagination'
 import { formatPeso } from '../utils/currency'
 
@@ -91,11 +92,7 @@ function MaterialsPage() {
             </thead>
             <tbody className="table__body">
               {loading ? (
-                <tr>
-                  <td colSpan={7} className="empty-state">
-                    Loading materials...
-                  </td>
-                </tr>
+                <TableLoadingState colSpan={7} message="Loading materials…" />
               ) : paginatedMaterials.length === 0 ? (
                 <tr>
                   <td colSpan={7}>
