@@ -6,13 +6,10 @@ use App\Models\Material;
 use App\Models\Product;
 use App\Models\ProductMaterial;
 use App\Models\UnitOfMeasurement;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\TestCase;
+use Tests\FeatureTestCase;
 
-class ProductCostingTest extends TestCase
+class ProductCostingTest extends FeatureTestCase
 {
-    use RefreshDatabase;
-
     public function test_it_returns_product_costing_breakdown_from_api(): void
     {
         $unit = UnitOfMeasurement::factory()->create(['symbol' => 'kg']);

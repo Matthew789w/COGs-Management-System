@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import axios from 'axios'
+import axios from '../lib/api'
 import { Building2, Calculator, ClipboardList, Pencil, Trash2, TrendingUp, Users, Zap } from 'lucide-react'
 import ManufacturingNav from '../components/manufacturing/ManufacturingNav'
 import Button from '../components/ui/Button'
@@ -8,6 +8,7 @@ import EmptyState from '../components/ui/EmptyState'
 import PageHeader from '../components/ui/PageHeader'
 import PanelHeader from '../components/ui/PanelHeader'
 import SelectField from '../components/ui/SelectField'
+import TableLoadingState from '../components/ui/TableLoadingState'
 import { formatPeso } from '../utils/currency'
 import { formatOverheadCategory, OVERHEAD_CATEGORIES } from '../utils/manufacturing'
 import { formatQuantity, normalizeQuantityInput } from '../utils/quantity'
@@ -68,6 +69,7 @@ function BillOfMaterialsPage() {
   const [loadingMaterials, setLoadingMaterials] = useState(true)
   const [loadingUnits, setLoadingUnits] = useState(true)
   const [loadingUtilities, setLoadingUtilities] = useState(true)
+  const [loadingProductData, setLoadingProductData] = useState(false)
 
   const selectedProductRecord = useMemo(() => {
     return products.find((product) => product.id === Number(selectedProduct)) || null
@@ -89,30 +91,36 @@ function BillOfMaterialsPage() {
   }, [])
 
   const refreshManufacturingData = useCallback(async (productId, options = {}) => {
-    const [materialsResponse, utilitiesResponse, laborResponse, overheadResponse] = await Promise.all([
-      axios.get('/api/product-materials', { params: { product_id: productId } }),
-      axios.get('/api/product-utilities', { params: { product_id: productId } }),
-      axios.get('/api/product-labor', { params: { product_id: productId } }),
-      axios.get('/api/product-overhead', { params: { product_id: productId } }),
-    ])
+    setLoadingProductData(true)
 
-    setBomItems(materialsResponse.data.data || [])
-    setUtilityItems(utilitiesResponse.data.data || [])
-    setLaborItems(laborResponse.data.data || [])
-    setOverheadItems(overheadResponse.data.data || [])
-    await fetchCosting(productId)
+    try {
+      const [materialsResponse, utilitiesResponse, laborResponse, overheadResponse] = await Promise.all([
+        axios.get('/api/product-materials', { params: { product_id: productId } }),
+        axios.get('/api/product-utilities', { params: { product_id: productId } }),
+        axios.get('/api/product-labor', { params: { product_id: productId } }),
+        axios.get('/api/product-overhead', { params: { product_id: productId } }),
+      ])
 
-    if (options.recalculatePricing && options.profitMargin) {
-      try {
-        await fetchPricing(productId, options.profitMargin)
-      } catch (error) {
-        setPricing(null)
-        setPricingError(
-          error.response?.data?.errors?.profit_margin?.[0]
-            || error.response?.data?.message
-            || 'Unable to calculate pricing.',
-        )
+      setBomItems(materialsResponse.data.data || [])
+      setUtilityItems(utilitiesResponse.data.data || [])
+      setLaborItems(laborResponse.data.data || [])
+      setOverheadItems(overheadResponse.data.data || [])
+      await fetchCosting(productId)
+
+      if (options.recalculatePricing && options.profitMargin) {
+        try {
+          await fetchPricing(productId, options.profitMargin)
+        } catch (error) {
+          setPricing(null)
+          setPricingError(
+            error.response?.data?.errors?.profit_margin?.[0]
+              || error.response?.data?.message
+              || 'Unable to calculate pricing.',
+          )
+        }
       }
+    } finally {
+      setLoadingProductData(false)
     }
   }, [fetchCosting, fetchPricing])
 
@@ -144,8 +152,15 @@ function BillOfMaterialsPage() {
       setCosting(null)
       setPricing(null)
       setPricingError('')
+      setLoadingProductData(false)
       return
     }
+
+    setBomItems([])
+    setUtilityItems([])
+    setLaborItems([])
+    setOverheadItems([])
+    setCosting(null)
 
     setEditingId(null)
     setUtilityEditingId(null)
@@ -832,7 +847,9 @@ function BillOfMaterialsPage() {
                   </tr>
                 </thead>
                 <tbody className="table__body">
-                  {bomItems.length === 0 ? (
+                  {loadingProductData ? (
+                    <TableLoadingState colSpan={7} message="Loading BOM items…" />
+                  ) : bomItems.length === 0 ? (
                     <tr>
                       <td colSpan={7}>
                         <EmptyState
@@ -993,7 +1010,9 @@ function BillOfMaterialsPage() {
                   </tr>
                 </thead>
                 <tbody className="table__body">
-                  {utilityItems.length === 0 ? (
+                  {loadingProductData ? (
+                    <TableLoadingState colSpan={7} message="Loading utility usage…" />
+                  ) : utilityItems.length === 0 ? (
                     <tr>
                       <td colSpan={7}>
                         <EmptyState
@@ -1155,7 +1174,9 @@ function BillOfMaterialsPage() {
                   </tr>
                 </thead>
                 <tbody className="table__body">
-                  {laborItems.length === 0 ? (
+                  {loadingProductData ? (
+                    <TableLoadingState colSpan={7} message="Loading direct labor…" />
+                  ) : laborItems.length === 0 ? (
                     <tr>
                       <td colSpan={7}>
                         <EmptyState
@@ -1307,7 +1328,9 @@ function BillOfMaterialsPage() {
                   </tr>
                 </thead>
                 <tbody className="table__body">
-                  {overheadItems.length === 0 ? (
+                  {loadingProductData ? (
+                    <TableLoadingState colSpan={6} message="Loading manufacturing overhead…" />
+                  ) : overheadItems.length === 0 ? (
                     <tr>
                       <td colSpan={6}>
                         <EmptyState
@@ -1389,7 +1412,23 @@ function BillOfMaterialsPage() {
             </div>
             {productionQuantityError && <p className="form-error">{productionQuantityError}</p>}
 
-            {costing ? (
+            {loadingProductData ? (
+              <div className="table-wrapper">
+                <table className="table">
+                  <thead className="table__head">
+                    <tr>
+                      <th>Cost category</th>
+                      <th className="table__col-num">Quantity</th>
+                      <th className="table__col-num">Unit cost</th>
+                      <th className="table__col-num">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody className="table__body">
+                    <TableLoadingState colSpan={4} message="Loading product costing…" rows={5} />
+                  </tbody>
+                </table>
+              </div>
+            ) : costing ? (
               <div className="costing-grid">
                 {renderCostingLineTable('Material costs', costing.material_costs)}
                 {renderCostingLineTable('Utility costs', costing.utility_costs)}
@@ -1475,7 +1514,12 @@ function BillOfMaterialsPage() {
             </div>
             {pricingError && <p className="form-error">{pricingError}</p>}
 
-            {pricing ? (
+            {loadingProductData ? (
+              <div className="manufacturing-panel-loading" role="status" aria-live="polite">
+                <span className="table-loading__spinner" aria-hidden="true" />
+                <span>Loading pricing data…</span>
+              </div>
+            ) : pricing ? (
               <div className="costing-summary">
                 <div className="costing-summary__row">
                   <span className="costing-summary__label">COGS per unit</span>

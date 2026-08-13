@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import axios from 'axios'
+import axios from '../../lib/api'
 import { Printer } from 'lucide-react'
 import ManufacturingNav from '../../components/manufacturing/ManufacturingNav'
 import ReportFilters from '../../components/reports/ReportFilters'

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import axios from 'axios'
+import axios from '../lib/api'
 import { ArrowLeft, Save } from 'lucide-react'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'

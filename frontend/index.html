@@ -11,6 +11,42 @@
       rel="stylesheet"
     />
     <title>COGs System</title>
+    <script>
+      (function () {
+        try {
+          var theme = localStorage.getItem('cogs-theme')
+          if (theme === 'light' || theme === 'dark') {
+            document.documentElement.setAttribute('data-theme', theme)
+            document.documentElement.style.colorScheme = theme
+          } else if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.setAttribute('data-theme', 'dark')
+            document.documentElement.style.colorScheme = 'dark'
+          }
+        } catch (e) {}
+        try {
+          var accentRaw = localStorage.getItem('cogs-accent')
+          if (accentRaw) {
+            var accent = JSON.parse(accentRaw)
+            var presets = {
+              indigo: '#6366f1',
+              blue: '#3b82f6',
+              emerald: '#10b981',
+              rose: '#f43f5e',
+              amber: '#f59e0b',
+              violet: '#8b5cf6',
+              cyan: '#06b6d4',
+              slate: '#64748b',
+            }
+            var primary =
+              accent.presetId === 'custom' && accent.customPrimary
+                ? accent.customPrimary
+                : presets[accent.presetId] || presets.indigo
+            document.documentElement.style.setProperty('--primary', primary)
+            document.documentElement.style.setProperty('--primary-blue', primary)
+          }
+        } catch (e) {}
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

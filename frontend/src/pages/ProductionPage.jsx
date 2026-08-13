@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import axios from 'axios'
+import axios from '../lib/api'
 import { CheckCircle2, ChevronDown, ChevronRight, Factory, Plus, XCircle } from 'lucide-react'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'

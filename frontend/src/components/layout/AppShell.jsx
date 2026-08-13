@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import {
   Bell,
@@ -6,14 +7,24 @@ import {
   LayoutDashboard,
   Layers,
   Menu,
+  Moon,
   Package,
   Ruler,
   Search,
+  Sun,
+  Users,
   Warehouse,
   Zap,
 } from 'lucide-react'
 import { useSidebar } from '../../hooks/useSidebar'
+import { useTheme } from '../../context/ThemeContext'
+import { useNotifications } from '../../context/NotificationsContext'
+import { useUser } from '../../context/UserContext'
+import { useAdministratorAccess } from '../../utils/users'
 import BrandLogo from './BrandLogo'
+import NotificationsPanel from './NotificationsPanel'
+import ProfileMenu from './ProfileMenu'
+import UserAvatar from '../ui/UserAvatar'
 
 const navItems = [
   { label: 'Dashboard', shortLabel: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
@@ -28,6 +39,19 @@ const navItems = [
 
 function AppShell({ children }) {
   const { collapsed, mobileOpen, toggleCollapsed, toggleMobile, closeMobile } = useSidebar()
+  const { isDark, toggleTheme } = useTheme()
+  const { unreadCount } = useNotifications()
+  const { profile } = useUser()
+  const { isAdmin } = useAdministratorAccess()
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+
+  const navItemsWithUsers = isAdmin
+    ? [
+        ...navItems,
+        { label: 'Users', shortLabel: 'Users', path: '/users', icon: Users },
+      ]
+    : navItems
 
   const shellClasses = [
     'app-shell',
@@ -63,7 +87,7 @@ function AppShell({ children }) {
         <nav className="sidebar__nav">
           <p className="sidebar__group-title">Navigation</p>
           <div className="sidebar__links">
-            {navItems.map((item) => (
+            {navItemsWithUsers.map((item) => (
               <NavLink
                 key={item.path}
                 to={item.path}
@@ -132,19 +156,66 @@ function AppShell({ children }) {
           </div>
 
           <div className="topbar__actions">
-            <button type="button" className="topbar__icon-btn" aria-label="Notifications">
-              <Bell size={18} />
-              <span className="topbar__notification-dot" aria-hidden="true" />
+            <button
+              type="button"
+              className="topbar__icon-btn"
+              onClick={toggleTheme}
+              aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+              title={isDark ? 'Light mode' : 'Dark mode'}
+            >
+              {isDark ? <Sun size={18} /> : <Moon size={18} />}
             </button>
 
-            <div className="topbar__profile">
-              <div className="topbar__profile-info">
-                <strong>Plant Manager</strong>
-                <span>Administrator</span>
-              </div>
-              <div className="profile__avatar" aria-hidden="true">
-                PM
-              </div>
+            <div className="topbar__notifications">
+              <button
+                type="button"
+                className="topbar__icon-btn"
+                onClick={() => {
+                  setProfileMenuOpen(false)
+                  setNotificationsOpen((current) => !current)
+                }}
+                aria-label="Notifications"
+                aria-expanded={notificationsOpen}
+                aria-haspopup="true"
+              >
+                <Bell size={18} />
+                {unreadCount > 0 && (
+                  <span className="topbar__notification-badge" aria-hidden="true">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              <NotificationsPanel
+                open={notificationsOpen}
+                onClose={() => setNotificationsOpen(false)}
+              />
+            </div>
+
+            <div className="topbar__profile-menu">
+              <button
+                type="button"
+                className="topbar__profile"
+                onClick={() => {
+                  setNotificationsOpen(false)
+                  setProfileMenuOpen((current) => !current)
+                }}
+                aria-label="Account menu"
+                aria-expanded={profileMenuOpen}
+                aria-haspopup="true"
+              >
+                <div className="topbar__profile-info">
+                  <strong>{profile?.name || 'Plant Manager'}</strong>
+                  <span>{profile?.role || 'Administrator'}</span>
+                </div>
+                <UserAvatar profile={profile} size="sm" />
+              </button>
+
+              <ProfileMenu
+                open={profileMenuOpen}
+                onClose={() => setProfileMenuOpen(false)}
+                profile={profile}
+              />
             </div>
           </div>
         </header>

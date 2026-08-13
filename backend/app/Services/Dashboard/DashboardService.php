@@ -2,6 +2,7 @@
 
 namespace App\Services\Dashboard;
 
+use App\Models\InventoryBalance;
 use App\Models\InventoryTransaction;
 use App\Models\Material;
 use App\Models\Product;
@@ -9,11 +10,17 @@ use App\Models\ProductMaterial;
 use App\Models\ProductionBatch;
 use App\Models\UnitOfMeasurement;
 use App\Models\Utility;
+use App\Services\Costing\Exceptions\InvalidProductionQuantityException;
+use App\Services\Costing\ProductCostingService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 class DashboardService
 {
+    public function __construct(
+        private readonly ProductCostingService $costingService,
+    ) {}
+
     public function summary(): array
     {
         $productIdsWithBom = ProductMaterial::query()
@@ -34,13 +41,29 @@ class DashboardService
                 'draft_batches' => ProductionBatch::query()
                     ->where('status', ProductionBatch::STATUS_DRAFT)
                     ->count(),
+                'cancelled_batches' => ProductionBatch::query()
+                    ->where('status', ProductionBatch::STATUS_CANCELLED)
+                    ->count(),
                 'products_with_bom' => $productIdsWithBom->count(),
             ],
             'recent_activity' => $this->recentActivity(),
+            'analytics' => $this->analytics(),
         ];
     }
 
-    private function recentActivity(): array
+    public function analytics(): array
+    {
+        return [
+            'production_trend' => $this->productionTrend(),
+            'batch_status' => $this->batchStatusBreakdown(),
+            'top_cogs_products' => $this->topCogsProducts(),
+            'cost_mix' => $this->aggregateCostMix(),
+            'product_margins' => $this->productMargins(),
+            'inventory_materials' => $this->topInventoryMaterials(),
+        ];
+    }
+
+    public function recentActivity(): array
     {
         $items = collect()
             ->merge($this->mapRecentProducts())
@@ -124,6 +147,7 @@ class DashboardService
                     'variant' => match ($batch->status) {
                         ProductionBatch::STATUS_CONFIRMED => 'success',
                         ProductionBatch::STATUS_DRAFT => 'warning',
+                        ProductionBatch::STATUS_CANCELLED => 'error',
                         default => 'default',
                     },
                 ],
@@ -196,5 +220,188 @@ class DashboardService
             InventoryTransaction::TYPE_ADJUSTMENT => 'Adjustment',
             default => 'Inventory',
         };
+    }
+
+    private function productionTrend(): array
+    {
+        $startDate = Carbon::now()->subMonths(5)->startOfMonth();
+        $months = collect();
+
+        for ($index = 5; $index >= 0; $index--) {
+            $date = Carbon::now()->subMonths($index)->startOfMonth();
+
+            $months->put($date->format('Y-m'), [
+                'month' => $date->format('Y-m'),
+                'label' => $date->format('M'),
+                'batches' => 0,
+                'quantity' => 0.0,
+            ]);
+        }
+
+        ProductionBatch::query()
+            ->select(['production_date', 'production_quantity', 'status'])
+            ->whereIn('status', ProductionBatch::statuses())
+            ->whereDate('production_date', '>=', $startDate)
+            ->get()
+            ->each(function (ProductionBatch $batch) use ($months): void {
+                $key = Carbon::parse($batch->production_date)->format('Y-m');
+
+                if (! $months->has($key)) {
+                    return;
+                }
+
+                $current = $months->get($key);
+                $current['batches']++;
+                $current['quantity'] = round($current['quantity'] + (float) $batch->production_quantity, 4);
+                $months->put($key, $current);
+            });
+
+        return $months->values()->all();
+    }
+
+    private function batchStatusBreakdown(): array
+    {
+        $counts = ProductionBatch::query()
+            ->selectRaw('status, COUNT(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        return collect(ProductionBatch::statuses())
+            ->map(fn (string $status) => [
+                'status' => $status,
+                'label' => ucfirst($status),
+                'count' => (int) ($counts[$status] ?? 0),
+            ])
+            ->filter(fn (array $item) => $item['count'] > 0)
+            ->values()
+            ->all();
+    }
+
+    private function topCogsProducts(): array
+    {
+        return $this->configuredProductBreakdowns()
+            ->filter(fn (array $row) => $row['has_bom'] && $row['cogs_per_unit'] > 0)
+            ->sortByDesc('cogs_per_unit')
+            ->take(6)
+            ->values()
+            ->map(fn (array $row) => [
+                'product_id' => $row['product_id'],
+                'product_name' => $row['product_name'],
+                'cogs_per_unit' => $row['cogs_per_unit'],
+            ])
+            ->all();
+    }
+
+    private function aggregateCostMix(): array
+    {
+        $totals = [
+            'materials' => 0.0,
+            'utilities' => 0.0,
+            'labor' => 0.0,
+            'overhead' => 0.0,
+        ];
+
+        foreach ($this->configuredProductBreakdowns() as $row) {
+            $totals['materials'] += $row['total_material_cost'];
+            $totals['utilities'] += $row['total_utility_cost'];
+            $totals['labor'] += $row['total_labor_cost'];
+            $totals['overhead'] += $row['total_overhead_cost'];
+        }
+
+        return collect([
+            ['category' => 'materials', 'label' => 'Materials'],
+            ['category' => 'utilities', 'label' => 'Utilities'],
+            ['category' => 'labor', 'label' => 'Labor'],
+            ['category' => 'overhead', 'label' => 'Overhead'],
+        ])
+            ->map(fn (array $item) => [
+                'category' => $item['category'],
+                'label' => $item['label'],
+                'amount' => round($totals[$item['category']], 4),
+            ])
+            ->filter(fn (array $item) => $item['amount'] > 0)
+            ->values()
+            ->all();
+    }
+
+    private function productMargins(): array
+    {
+        return $this->configuredProductBreakdowns()
+            ->filter(fn (array $row) => $row['list_price'] > 0 && $row['cogs_per_unit'] > 0 && $row['has_bom'])
+            ->map(function (array $row): array {
+                $margin = round($row['list_price'] - $row['cogs_per_unit'], 4);
+                $marginPercent = round(($margin / $row['list_price']) * 100, 2);
+                $marginPercent = max(-100, min(100, $marginPercent));
+
+                return [
+                    'product_id' => $row['product_id'],
+                    'product_name' => $row['product_name'],
+                    'list_price' => $row['list_price'],
+                    'cogs_per_unit' => $row['cogs_per_unit'],
+                    'margin_per_unit' => $margin,
+                    'margin_percent' => $marginPercent,
+                ];
+            })
+            ->sortByDesc('margin_percent')
+            ->take(6)
+            ->values()
+            ->all();
+    }
+
+    private function topInventoryMaterials(): array
+    {
+        return InventoryBalance::query()
+            ->select(['material_id', 'quantity_on_hand', 'unit_id'])
+            ->whereNotNull('material_id')
+            ->where('quantity_on_hand', '>', 0)
+            ->with([
+                'material:id,name',
+                'unit:id,symbol',
+            ])
+            ->orderByDesc('quantity_on_hand')
+            ->limit(6)
+            ->get()
+            ->map(fn (InventoryBalance $balance) => [
+                'material_id' => $balance->material_id,
+                'material_name' => $balance->material?->name ?? 'Material',
+                'quantity' => (float) $balance->quantity_on_hand,
+                'unit' => $balance->unit?->symbol,
+            ])
+            ->all();
+    }
+
+    private function configuredProductBreakdowns(): Collection
+    {
+        $productIdsWithBom = ProductMaterial::query()
+            ->distinct()
+            ->pluck('product_id')
+            ->flip();
+
+        return Product::query()
+            ->select(['id', 'name', 'sku', 'list_price', 'production_quantity', 'is_active'])
+            ->where('is_active', true)
+            ->orderBy('name')
+            ->get()
+            ->map(function (Product $product) use ($productIdsWithBom): ?array {
+                try {
+                    $breakdown = $this->costingService->calculate($product);
+                } catch (InvalidProductionQuantityException) {
+                    return null;
+                }
+
+                return [
+                    'product_id' => $product->id,
+                    'product_name' => $product->name,
+                    'list_price' => (float) $product->list_price,
+                    'cogs_per_unit' => $breakdown->cogsPerUnit,
+                    'total_material_cost' => $breakdown->totalMaterialCost,
+                    'total_utility_cost' => $breakdown->totalUtilityCost,
+                    'total_labor_cost' => $breakdown->totalLaborCost,
+                    'total_overhead_cost' => $breakdown->totalOverheadCost,
+                    'has_bom' => $productIdsWithBom->has($product->id),
+                ];
+            })
+            ->filter()
+            ->values();
     }
 }

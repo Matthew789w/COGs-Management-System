@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
-import axios from 'axios'
+import axios from '../lib/api'
 import { Eye, Pencil, Plus, Ruler, Trash2 } from 'lucide-react'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
@@ -11,13 +11,40 @@ import PanelHeader from '../components/ui/PanelHeader'
 import TableLoadingState from '../components/ui/TableLoadingState'
 import TablePagination from '../components/ui/TablePagination'
 
+import {
+  applyTableFilters,
+  countActiveFilters,
+  createSelectFilter,
+  emptyFilters,
+  resolveFilterFields,
+  statusFilterDef,
+} from '../utils/tableFilters'
+
 const PAGE_SIZE = 10
+
+const UNIT_FILTER_DEFS = [
+  statusFilterDef,
+  createSelectFilter({
+    key: 'category',
+    label: 'Category',
+    allLabel: 'All categories',
+    getValue: (unit) => unit.category,
+  }),
+]
+
+const UNIT_SEARCH_GETTERS = [
+  (unit) => unit.name,
+  (unit) => unit.symbol,
+  (unit) => unit.code,
+  (unit) => unit.category,
+]
 
 function UnitsPage() {
   const [units, setUnits] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
+  const [filters, setFilters] = useState(() => emptyFilters(UNIT_FILTER_DEFS))
   const [page, setPage] = useState(1)
 
   useEffect(() => {
@@ -29,24 +56,29 @@ function UnitsPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  const filteredUnits = useMemo(() => {
-    const query = search.trim().toLowerCase()
-    if (!query) return units
-    return units.filter(
-      (unit) =>
-        unit.name.toLowerCase().includes(query) ||
-        unit.symbol.toLowerCase().includes(query) ||
-        unit.code.toLowerCase().includes(query) ||
-        unit.category.toLowerCase().includes(query),
-    )
-  }, [units, search])
+  const filterFields = useMemo(() => resolveFilterFields(units, UNIT_FILTER_DEFS), [units])
+
+  const filteredUnits = useMemo(
+    () =>
+      applyTableFilters(units, {
+        search,
+        searchGetters: UNIT_SEARCH_GETTERS,
+        filters,
+        defs: UNIT_FILTER_DEFS,
+      }),
+    [units, search, filters],
+  )
 
   const paginatedUnits = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE
     return filteredUnits.slice(start, start + PAGE_SIZE)
   }, [filteredUnits, page])
 
-  useEffect(() => { setPage(1) }, [search])
+  useEffect(() => {
+    setPage(1)
+  }, [search, filters])
+
+  const hasActiveQuery = search.trim() !== '' || countActiveFilters(filters) > 0
 
   return (
     <div>
@@ -55,14 +87,21 @@ function UnitsPage() {
         description="Review measurement units and conversion settings used in costing calculations."
         action={
           <Link to="/units/create">
-            <Button variant="secondary" icon={Plus}>Add unit</Button>
+            <Button variant="primary" icon={Plus}>Add unit</Button>
           </Link>
         }
       />
 
       <Card>
         <PanelHeader title="Available units" />
-        <DataTableToolbar searchPlaceholder="Search units..." searchValue={search} onSearchChange={setSearch} />
+        <DataTableToolbar
+          searchPlaceholder="Search units..."
+          searchValue={search}
+          onSearchChange={setSearch}
+          filterFields={filterFields}
+          filters={filters}
+          onFiltersChange={setFilters}
+        />
         {error && <p className="form-error">{error}</p>}
 
         <div className="table-wrapper">
@@ -85,8 +124,8 @@ function UnitsPage() {
                   <td colSpan={6}>
                     <EmptyState
                       icon={Ruler}
-                      title={search ? 'No units found' : 'No units yet'}
-                      description={search ? 'Try changing your search or filter.' : 'Create a unit to get started.'}
+                      title={hasActiveQuery ? 'No units found' : 'No units yet'}
+                      description={hasActiveQuery ? 'Try changing your search or filter.' : 'Create a unit to get started.'}
                     />
                   </td>
                 </tr>

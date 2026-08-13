@@ -13,13 +13,10 @@ use App\Models\ProductionBatchMaterial;
 use App\Models\UnitOfMeasurement;
 use App\Models\Utility;
 use App\Services\Inventory\InventoryService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\TestCase;
+use Tests\FeatureTestCase;
 
-class CogsReportTest extends TestCase
+class CogsReportTest extends FeatureTestCase
 {
-    use RefreshDatabase;
-
     public function test_it_returns_report_meta(): void
     {
         Product::factory()->count(2)->create();

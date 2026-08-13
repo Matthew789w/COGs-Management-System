@@ -10,13 +10,10 @@ use App\Models\ProductMaterial;
 use App\Models\ProductionBatch;
 use App\Models\UnitOfMeasurement;
 use App\Services\Inventory\InventoryService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\TestCase;
+use Tests\FeatureTestCase;
 
-class ProductionBatchTest extends TestCase
+class ProductionBatchTest extends FeatureTestCase
 {
-    use RefreshDatabase;
-
     public function test_it_previews_production_requirements_without_deducting_inventory(): void
     {
         $unit = UnitOfMeasurement::factory()->create(['symbol' => 'kg']);

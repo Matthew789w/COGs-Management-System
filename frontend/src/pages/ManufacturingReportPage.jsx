@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import axios from 'axios'
+import axios from '../lib/api'
 import { FileText, Printer } from 'lucide-react'
 import ManufacturingNav from '../components/manufacturing/ManufacturingNav'
 import ReportsNav from '../components/reports/ReportsNav'

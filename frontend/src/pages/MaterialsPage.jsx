@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
-import axios from 'axios'
+import axios from '../lib/api'
 import { Eye, Layers, Pencil, Plus, Trash2 } from 'lucide-react'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
@@ -11,14 +11,46 @@ import PanelHeader from '../components/ui/PanelHeader'
 import TableLoadingState from '../components/ui/TableLoadingState'
 import TablePagination from '../components/ui/TablePagination'
 import { formatPeso } from '../utils/currency'
+import {
+  applyTableFilters,
+  countActiveFilters,
+  createSelectFilter,
+  emptyFilters,
+  resolveFilterFields,
+  statusFilterDef,
+} from '../utils/tableFilters'
 
 const PAGE_SIZE = 10
+
+const MATERIAL_FILTER_DEFS = [
+  statusFilterDef,
+  createSelectFilter({
+    key: 'category',
+    label: 'Category',
+    allLabel: 'All categories',
+    getValue: (material) => material.unit?.category,
+  }),
+  createSelectFilter({
+    key: 'unit',
+    label: 'Unit',
+    allLabel: 'All units',
+    getValue: (material) => material.unit?.symbol,
+  }),
+]
+
+const MATERIAL_SEARCH_GETTERS = [
+  (material) => material.name,
+  (material) => material.sku,
+  (material) => material.unit?.symbol || '',
+  (material) => material.unit?.category || '',
+]
 
 function MaterialsPage() {
   const [materials, setMaterials] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
+  const [filters, setFilters] = useState(() => emptyFilters(MATERIAL_FILTER_DEFS))
   const [page, setPage] = useState(1)
 
   useEffect(() => {
@@ -32,17 +64,21 @@ function MaterialsPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  const filteredMaterials = useMemo(() => {
-    const query = search.trim().toLowerCase()
-    if (!query) return materials
-    return materials.filter(
-      (material) =>
-        material.name.toLowerCase().includes(query) ||
-        material.sku.toLowerCase().includes(query) ||
-        material.unit?.symbol?.toLowerCase().includes(query) ||
-        material.unit?.category?.toLowerCase().includes(query),
-    )
-  }, [materials, search])
+  const filterFields = useMemo(
+    () => resolveFilterFields(materials, MATERIAL_FILTER_DEFS),
+    [materials],
+  )
+
+  const filteredMaterials = useMemo(
+    () =>
+      applyTableFilters(materials, {
+        search,
+        searchGetters: MATERIAL_SEARCH_GETTERS,
+        filters,
+        defs: MATERIAL_FILTER_DEFS,
+      }),
+    [materials, search, filters],
+  )
 
   const paginatedMaterials = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE
@@ -51,7 +87,9 @@ function MaterialsPage() {
 
   useEffect(() => {
     setPage(1)
-  }, [search])
+  }, [search, filters])
+
+  const hasActiveQuery = search.trim() !== '' || countActiveFilters(filters) > 0
 
   return (
     <div>
@@ -60,7 +98,7 @@ function MaterialsPage() {
         description="Define raw material details, cost rates, and purchasing information."
         action={
           <Link to="/materials/create">
-            <Button variant="secondary" icon={Plus}>
+            <Button variant="primary" icon={Plus}>
               Add material
             </Button>
           </Link>
@@ -73,6 +111,9 @@ function MaterialsPage() {
           searchPlaceholder="Search materials..."
           searchValue={search}
           onSearchChange={setSearch}
+          filterFields={filterFields}
+          filters={filters}
+          onFiltersChange={setFilters}
         />
 
         {error && <p className="form-error">{error}</p>}
@@ -98,9 +139,9 @@ function MaterialsPage() {
                   <td colSpan={7}>
                     <EmptyState
                       icon={Layers}
-                      title={search ? 'No materials found' : 'No materials yet'}
+                      title={hasActiveQuery ? 'No materials found' : 'No materials yet'}
                       description={
-                        search
+                        hasActiveQuery
                           ? 'Try changing your search or filter.'
                           : 'Create a material to get started.'
                       }

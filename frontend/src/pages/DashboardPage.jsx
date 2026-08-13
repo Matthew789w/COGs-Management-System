@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import axios from 'axios'
+import axios from '../lib/api'
 import {
   BarChart3,
   Box,
@@ -9,20 +9,24 @@ import {
   Layers,
   Package,
   Plus,
-  Ruler,
   TrendingUp,
   Warehouse,
   Zap,
 } from 'lucide-react'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
+import DonutChart, { BATCH_STATUS_COLORS, COST_MIX_COLORS } from '../components/dashboard/DonutChart'
 import EmptyState from '../components/ui/EmptyState'
+import HorizontalBarChart from '../components/dashboard/HorizontalBarChart'
 import KpiCard from '../components/ui/KpiCard'
 import ListItem from '../components/ui/ListItem'
 import PageHeader from '../components/ui/PageHeader'
 import PanelHeader from '../components/ui/PanelHeader'
 import Badge from '../components/ui/Badge'
 import TableLoadingState from '../components/ui/TableLoadingState'
+import VerticalBarChart from '../components/dashboard/VerticalBarChart'
+import { formatPeso } from '../utils/currency'
+import { formatRelativeTime } from '../utils/formatRelativeTime'
 
 const activityIcons = {
   product: Package,
@@ -70,28 +74,15 @@ const quickActions = [
   },
 ]
 
-function formatRelativeTime(value) {
-  if (!value) return 'Recently'
+function formatQuantity(value) {
+  if (value === null || value === undefined) return '—'
+  return Number(value).toLocaleString('en-PH', { maximumFractionDigits: 0 })
+}
 
-  const timestamp = new Date(value).getTime()
-  const diffMs = Date.now() - timestamp
-  const diffMinutes = Math.floor(diffMs / 60000)
-
-  if (diffMinutes < 1) return 'Just now'
-  if (diffMinutes < 60) return `${diffMinutes} min ago`
-
-  const diffHours = Math.floor(diffMinutes / 60)
-  if (diffHours < 24) return `${diffHours} hr ago`
-
-  const diffDays = Math.floor(diffHours / 24)
-  if (diffDays === 1) return 'Yesterday'
-  if (diffDays < 7) return `${diffDays} days ago`
-
-  return new Date(value).toLocaleDateString('en-PH', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
+function formatPercent(value) {
+  if (value === null || value === undefined) return '—'
+  const capped = Math.max(-100, Math.min(100, Number(value)))
+  return `${capped.toFixed(1)}%`
 }
 
 function DashboardPage() {
@@ -115,6 +106,74 @@ function DashboardPage() {
   }, [])
 
   const counts = summary?.counts || {}
+  const analytics = summary?.analytics || {}
+
+  const productionTrendData = useMemo(
+    () =>
+      (analytics.production_trend || []).map((item) => ({
+        label: item.label,
+        value: item.batches,
+        quantity: item.quantity,
+      })),
+    [analytics.production_trend],
+  )
+
+  const batchStatusData = useMemo(
+    () =>
+      (analytics.batch_status || []).map((item) => ({
+        label: item.label,
+        value: item.count,
+      })),
+    [analytics.batch_status],
+  )
+
+  const topCogsData = useMemo(
+    () =>
+      (analytics.top_cogs_products || []).map((item) => ({
+        label: item.product_name,
+        value: item.cogs_per_unit,
+      })),
+    [analytics.top_cogs_products],
+  )
+
+  const costMixData = useMemo(
+    () =>
+      (analytics.cost_mix || []).map((item) => ({
+        label: item.label,
+        value: item.amount,
+      })),
+    [analytics.cost_mix],
+  )
+
+  const marginData = useMemo(
+    () =>
+      (analytics.product_margins || []).map((item) => ({
+        label: item.product_name,
+        value: item.margin_percent,
+        margin: item.margin_per_unit,
+      })),
+    [analytics.product_margins],
+  )
+
+  const inventoryData = useMemo(
+    () =>
+      (analytics.inventory_materials || []).map((item) => ({
+        label: item.material_name,
+        value: item.quantity,
+        unit: item.unit,
+      })),
+    [analytics.inventory_materials],
+  )
+
+  const totalProductionBatches = productionTrendData.reduce((sum, item) => sum + item.value, 0)
+
+  const batchMetaParts = [
+    `${counts.confirmed_batches ?? 0} confirmed`,
+    `${counts.draft_batches ?? 0} draft`,
+  ]
+  if ((counts.cancelled_batches ?? 0) > 0) {
+    batchMetaParts.push(`${counts.cancelled_batches} cancelled`)
+  }
 
   const kpiCards = [
     {
@@ -136,7 +195,7 @@ function DashboardPage() {
     {
       label: 'Production batches',
       value: counts.production_batches ?? '—',
-      meta: `${counts.confirmed_batches ?? 0} confirmed · ${counts.draft_batches ?? 0} draft`,
+      meta: batchMetaParts.join(' · '),
       icon: Factory,
       iconColor: 'orange',
       link: '/production',
@@ -155,7 +214,7 @@ function DashboardPage() {
     <div>
       <PageHeader
         title="Dashboard"
-        description="Live overview of master data, production activity, and costing readiness."
+        description="Live overview of master data, production activity, costing analytics, and inventory."
         action={
           <Link to="/products/create">
             <Button variant="primary" icon={Plus}>
@@ -184,6 +243,192 @@ function DashboardPage() {
             />
           </button>
         ))}
+      </div>
+
+      <div className="dashboard-analytics-grid">
+        <Card className="dashboard-analytics-card">
+          <PanelHeader
+            title="Production output"
+            action={
+              <Link to="/production" className="btn btn--link">
+                View batches
+              </Link>
+            }
+          />
+          <div className="dashboard-analytics-card__body">
+            <p className="dashboard-chart__description">
+              All batches (draft, confirmed, cancelled) over the last 6 months.
+            </p>
+            {loading ? (
+              <div className="dashboard-chart__loading">Loading chart…</div>
+            ) : productionTrendData.length ? (
+              <VerticalBarChart
+                data={productionTrendData}
+                valueKey="value"
+                labelKey="label"
+                formatAxis={(value) => String(Math.round(value))}
+                formatValue={(value) => `${value} batch${value === 1 ? '' : 'es'}`}
+                emptyHint="No batches recorded in this period yet. Create production batches to populate this chart."
+              />
+            ) : (
+              <VerticalBarChart data={[]} emptyLabel="Production trend will appear once batches are recorded." />
+            )}
+          </div>
+        </Card>
+
+        <Card className="dashboard-analytics-card">
+          <PanelHeader title="Batch status" />
+          <div className="dashboard-analytics-card__body">
+            <p className="dashboard-chart__description">
+              Current mix of draft, confirmed, and cancelled batches.
+            </p>
+            {loading ? (
+              <div className="dashboard-chart__loading">Loading chart…</div>
+            ) : batchStatusData.length ? (
+              <DonutChart
+                data={batchStatusData}
+                valueKey="value"
+                labelKey="label"
+                formatValue={formatQuantity}
+                centerLabel={String(counts.production_batches ?? 0)}
+                centerCaption="Total batches"
+                colorMap={BATCH_STATUS_COLORS}
+              />
+            ) : (
+              <EmptyState
+                icon={Factory}
+                title="No batches recorded"
+                description="Create a production batch to see status distribution."
+              />
+            )}
+          </div>
+        </Card>
+
+        <Card className="dashboard-analytics-card dashboard-analytics-card--wide">
+          <PanelHeader
+            title="Top COGS per unit"
+            action={
+              <Link to="/bom/reports" className="btn btn--link">
+                Full COGS report
+              </Link>
+            }
+          />
+          <div className="dashboard-analytics-card__body">
+            <p className="dashboard-chart__description">
+              Highest unit manufacturing costs across configured products.
+            </p>
+            {loading ? (
+              <div className="dashboard-chart__loading">Loading chart…</div>
+            ) : topCogsData.length ? (
+              <HorizontalBarChart
+                data={topCogsData}
+                valueKey="value"
+                labelKey="label"
+                formatValue={(value) => formatPeso(value, 2)}
+              />
+            ) : (
+              <EmptyState
+                icon={BarChart3}
+                title="No costing data yet"
+                description="Configure BOM, labor, and overhead on products to compare COGS."
+              />
+            )}
+          </div>
+        </Card>
+
+        <Card className="dashboard-analytics-card">
+          <PanelHeader title="Manufacturing cost mix" />
+          <div className="dashboard-analytics-card__body">
+            <p className="dashboard-chart__description">
+              How total recipe costs split across cost categories.
+            </p>
+            {loading ? (
+              <div className="dashboard-chart__loading">Loading chart…</div>
+            ) : costMixData.length ? (
+              <DonutChart
+                data={costMixData}
+                valueKey="value"
+                labelKey="label"
+                formatValue={(value) => formatPeso(value, 0)}
+                colorMap={COST_MIX_COLORS}
+              />
+            ) : (
+              <EmptyState
+                icon={Layers}
+                title="No cost breakdown yet"
+                description="Add materials, utilities, labor, or overhead to products."
+              />
+            )}
+          </div>
+        </Card>
+
+        <Card className="dashboard-analytics-card">
+          <PanelHeader
+            title="Best product margins"
+            action={
+              <Link to="/bom/reports" className="btn btn--link">
+                Pricing report
+              </Link>
+            }
+          />
+          <div className="dashboard-analytics-card__body">
+            <p className="dashboard-chart__description">
+              Gross margin based on list price minus COGS per unit.
+            </p>
+            {loading ? (
+              <div className="dashboard-chart__loading">Loading chart…</div>
+            ) : marginData.length ? (
+              <HorizontalBarChart
+                data={marginData}
+                valueKey="value"
+                labelKey="label"
+                formatValue={formatPercent}
+                secondaryKey="margin"
+                formatSecondary={(value) => formatPeso(value, 2)}
+              />
+            ) : (
+              <EmptyState
+                icon={TrendingUp}
+                title="No margin data yet"
+                description="Set list prices and product costing to compare profitability."
+              />
+            )}
+          </div>
+        </Card>
+
+        <Card className="dashboard-analytics-card">
+          <PanelHeader
+            title="Top material stock"
+            action={
+              <Link to="/inventory" className="btn btn--link">
+                Inventory
+              </Link>
+            }
+          />
+          <div className="dashboard-analytics-card__body">
+            <p className="dashboard-chart__description">
+              Materials with the highest quantity on hand.
+            </p>
+            {loading ? (
+              <div className="dashboard-chart__loading">Loading chart…</div>
+            ) : inventoryData.length ? (
+              <HorizontalBarChart
+                data={inventoryData}
+                valueKey="value"
+                labelKey="label"
+                formatValue={(value) => formatQuantity(value)}
+                secondaryKey="unit"
+                formatSecondary={(value) => (value ? String(value) : '')}
+              />
+            ) : (
+              <EmptyState
+                icon={Warehouse}
+                title="No inventory balances"
+                description="Receive materials or adjust inventory to track stock levels."
+              />
+            )}
+          </div>
+        </Card>
       </div>
 
       <div className="dashboard-grid">
@@ -255,6 +500,13 @@ function DashboardPage() {
           </div>
         </Card>
       </div>
+
+      {!loading && totalProductionBatches > 0 && (
+        <p className="dashboard-analytics-footnote">
+          Analytics reflect live product costing, confirmed production batches, and current inventory
+          balances.
+        </p>
+      )}
     </div>
   )
 }

@@ -10,13 +10,10 @@ use App\Models\ProductMaterial;
 use App\Models\ProductionBatch;
 use App\Models\UnitOfMeasurement;
 use App\Services\Inventory\InventoryService;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\TestCase;
+use Tests\FeatureTestCase;
 
-class InventoryTest extends TestCase
+class InventoryTest extends FeatureTestCase
 {
-    use RefreshDatabase;
-
     public function test_it_records_material_receipt_and_updates_balance(): void
     {
         $unit = UnitOfMeasurement::factory()->create();

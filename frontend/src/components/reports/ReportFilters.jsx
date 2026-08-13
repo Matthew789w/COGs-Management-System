@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import axios from 'axios'
+import axios from '../../lib/api'
 import SelectField from '../ui/SelectField'
 import Button from '../ui/Button'
 

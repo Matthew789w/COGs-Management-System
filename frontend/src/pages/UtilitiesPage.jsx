@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
-import axios from 'axios'
+import axios from '../lib/api'
 import { Eye, Pencil, Plus, Trash2, Zap } from 'lucide-react'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
@@ -11,14 +11,39 @@ import PanelHeader from '../components/ui/PanelHeader'
 import TableLoadingState from '../components/ui/TableLoadingState'
 import TablePagination from '../components/ui/TablePagination'
 import { formatPeso } from '../utils/currency'
+import {
+  applyTableFilters,
+  countActiveFilters,
+  createSelectFilter,
+  emptyFilters,
+  resolveFilterFields,
+  statusFilterDef,
+} from '../utils/tableFilters'
 
 const PAGE_SIZE = 10
+
+const UTILITY_FILTER_DEFS = [
+  statusFilterDef,
+  createSelectFilter({
+    key: 'unit',
+    label: 'Unit',
+    allLabel: 'All units',
+    getValue: (utility) => utility.unit?.symbol,
+  }),
+]
+
+const UTILITY_SEARCH_GETTERS = [
+  (utility) => utility.name,
+  (utility) => utility.code,
+  (utility) => utility.unit?.symbol || '',
+]
 
 function UtilitiesPage() {
   const [utilities, setUtilities] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
+  const [filters, setFilters] = useState(() => emptyFilters(UTILITY_FILTER_DEFS))
   const [page, setPage] = useState(1)
 
   useEffect(() => {
@@ -30,23 +55,32 @@ function UtilitiesPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  const filteredUtilities = useMemo(() => {
-    const query = search.trim().toLowerCase()
-    if (!query) return utilities
-    return utilities.filter(
-      (utility) =>
-        utility.name.toLowerCase().includes(query) ||
-        utility.code.toLowerCase().includes(query) ||
-        utility.unit?.symbol?.toLowerCase().includes(query),
-    )
-  }, [utilities, search])
+  const filterFields = useMemo(
+    () => resolveFilterFields(utilities, UTILITY_FILTER_DEFS),
+    [utilities],
+  )
+
+  const filteredUtilities = useMemo(
+    () =>
+      applyTableFilters(utilities, {
+        search,
+        searchGetters: UTILITY_SEARCH_GETTERS,
+        filters,
+        defs: UTILITY_FILTER_DEFS,
+      }),
+    [utilities, search, filters],
+  )
 
   const paginatedUtilities = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE
     return filteredUtilities.slice(start, start + PAGE_SIZE)
   }, [filteredUtilities, page])
 
-  useEffect(() => { setPage(1) }, [search])
+  useEffect(() => {
+    setPage(1)
+  }, [search, filters])
+
+  const hasActiveQuery = search.trim() !== '' || countActiveFilters(filters) > 0
 
   return (
     <div>
@@ -62,7 +96,14 @@ function UtilitiesPage() {
 
       <Card>
         <PanelHeader title="Utility rate table" />
-        <DataTableToolbar searchPlaceholder="Search utilities..." searchValue={search} onSearchChange={setSearch} />
+        <DataTableToolbar
+          searchPlaceholder="Search utilities..."
+          searchValue={search}
+          onSearchChange={setSearch}
+          filterFields={filterFields}
+          filters={filters}
+          onFiltersChange={setFilters}
+        />
         {error && <p className="form-error">{error}</p>}
 
         <div className="table-wrapper">
@@ -85,8 +126,12 @@ function UtilitiesPage() {
                   <td colSpan={6}>
                     <EmptyState
                       icon={Zap}
-                      title={search ? 'No utilities found' : 'No utilities yet'}
-                      description={search ? 'Try changing your search or filter.' : 'Create a utility to get started.'}
+                      title={hasActiveQuery ? 'No utilities found' : 'No utilities yet'}
+                      description={
+                        hasActiveQuery
+                          ? 'Try changing your search or filter.'
+                          : 'Create a utility to get started.'
+                      }
                     />
                   </td>
                 </tr>

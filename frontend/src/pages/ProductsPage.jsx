@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
-import axios from 'axios'
+import axios from '../lib/api'
 import { Eye, Package, Pencil, Plus, Trash2 } from 'lucide-react'
 import Button from '../components/ui/Button'
 import Card from '../components/ui/Card'
@@ -11,14 +11,38 @@ import PanelHeader from '../components/ui/PanelHeader'
 import TableLoadingState from '../components/ui/TableLoadingState'
 import TablePagination from '../components/ui/TablePagination'
 import { formatPeso } from '../utils/currency'
+import {
+  applyTableFilters,
+  countActiveFilters,
+  createSelectFilter,
+  emptyFilters,
+  resolveFilterFields,
+  statusFilterDef,
+} from '../utils/tableFilters'
 
 const PAGE_SIZE = 10
+
+const PRODUCT_FILTER_DEFS = [
+  statusFilterDef,
+  createSelectFilter({
+    key: 'default_unit',
+    label: 'Default unit',
+    allLabel: 'All units',
+    getValue: (product) => product.default_unit?.symbol,
+  }),
+]
+
+const PRODUCT_SEARCH_GETTERS = [
+  (product) => product.name,
+  (product) => product.sku,
+]
 
 function ProductsPage() {
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
+  const [filters, setFilters] = useState(() => emptyFilters(PRODUCT_FILTER_DEFS))
   const [page, setPage] = useState(1)
 
   useEffect(() => {
@@ -32,15 +56,21 @@ function ProductsPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  const filteredProducts = useMemo(() => {
-    const query = search.trim().toLowerCase()
-    if (!query) return products
-    return products.filter(
-      (product) =>
-        product.name.toLowerCase().includes(query) ||
-        product.sku.toLowerCase().includes(query),
-    )
-  }, [products, search])
+  const filterFields = useMemo(
+    () => resolveFilterFields(products, PRODUCT_FILTER_DEFS),
+    [products],
+  )
+
+  const filteredProducts = useMemo(
+    () =>
+      applyTableFilters(products, {
+        search,
+        searchGetters: PRODUCT_SEARCH_GETTERS,
+        filters,
+        defs: PRODUCT_FILTER_DEFS,
+      }),
+    [products, search, filters],
+  )
 
   const paginatedProducts = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE
@@ -49,7 +79,9 @@ function ProductsPage() {
 
   useEffect(() => {
     setPage(1)
-  }, [search])
+  }, [search, filters])
+
+  const hasActiveQuery = search.trim() !== '' || countActiveFilters(filters) > 0
 
   return (
     <div>
@@ -71,6 +103,9 @@ function ProductsPage() {
           searchPlaceholder="Search products..."
           searchValue={search}
           onSearchChange={setSearch}
+          filterFields={filterFields}
+          filters={filters}
+          onFiltersChange={setFilters}
         />
 
         {error && <p className="form-error">{error}</p>}
@@ -95,9 +130,9 @@ function ProductsPage() {
                   <td colSpan={6}>
                     <EmptyState
                       icon={Package}
-                      title={search ? 'No products found' : 'No products yet'}
+                      title={hasActiveQuery ? 'No products found' : 'No products yet'}
                       description={
-                        search
+                        hasActiveQuery
                           ? 'Try changing your search or filter.'
                           : 'Create a product to get started.'
                       }

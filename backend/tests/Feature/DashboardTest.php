@@ -6,13 +6,10 @@ use App\Models\Material;
 use App\Models\Product;
 use App\Models\ProductionBatch;
 use App\Models\UnitOfMeasurement;
-use Illuminate\Foundation\Testing\RefreshDatabase;
-use Tests\TestCase;
+use Tests\FeatureTestCase;
 
-class DashboardTest extends TestCase
+class DashboardTest extends FeatureTestCase
 {
-    use RefreshDatabase;
-
     public function test_it_returns_dashboard_summary_with_live_counts(): void
     {
         $unit = UnitOfMeasurement::factory()->create();
@@ -45,7 +42,16 @@ class DashboardTest extends TestCase
                         'products_with_bom',
                     ],
                     'recent_activity',
+                    'analytics' => [
+                        'production_trend',
+                        'batch_status',
+                        'top_cogs_products',
+                        'cost_mix',
+                        'product_margins',
+                        'inventory_materials',
+                    ],
                 ],
-            ]);
+            ])
+            ->assertJsonCount(6, 'data.analytics.production_trend');
     }
 }
